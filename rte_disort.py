@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 from pydisort import Disort, DisortOptions, scattering_moments
 import torch
@@ -5,6 +6,8 @@ torch.set_default_dtype(torch.float64)
 from config import SimulationConfig
 from grid import LayerGrid
 from scipy.interpolate import interpn
+
+logger = logging.getLogger(__name__)
 
 
 class DisortRTESolver:
@@ -21,6 +24,18 @@ class DisortRTESolver:
         # New mode parameters
         self.solver_mode = solver_mode
         self.spectral_component = spectral_component
+
+        # Training data recording
+        self._record_mode = config.record_disort_data and n_cols == 1 and not output_radiance
+        if self._record_mode:
+            self._record_buffer = {
+                'T_profile': [], 'mu': [], 'F': [],
+                'ssalb': [], 'g': [], 'tau_total': [],
+                'source_term': [], 'flux_up': [],
+            }
+            self._record_file = config.disort_record_file
+            self._record_flush_interval = 10000
+            logger.info(f"DISORT recording enabled -> {self._record_file}")
         
         # Determine effective mode for this instance
         self._determine_effective_mode()
@@ -91,16 +106,7 @@ class DisortRTESolver:
             else:
                 raise ValueError(f"Unknown solver_mode: {self.solver_mode}")
         else:
-            # Legacy mode: determine from existing logic
-            raise ValueError(f"Solver mode must be specified!")
-            # if self.cfg.multi_wave:
-            #     self.effective_mode = 'multi_wave'
-            #     self.is_multi_wave = True
-            #     self.should_load_solar_spectrum = True  # Legacy multi-wave needs solar spectrum
-            # else:
-            #     self.effective_mode = 'two_wave'
-            #     self.is_multi_wave = False
-            #     self.should_load_solar_spectrum = False  # Legacy two-wave uses cfg.J
+            raise ValueError("Solver mode must be specified!")
     
     def _filter_thermal_wavelengths(self):
         """Filter loaded constants to thermal wavelengths only (for hybrid_thermal mode)."""
@@ -155,14 +161,14 @@ class DisortRTESolver:
             #Load multi-wave solar flux file. 
             solar_array = np.loadtxt(solar_file)
             if(len(solar_array[:,0]) != len(self.wavenumbers) or np.max(solar_array[:,0]-self.wavenumbers)>0.1):
-                print("Warning: Solar spectrum file wavenumbers do not match scattering files!")
+                logger.warning("Solar spectrum file wavenumbers do not match scattering files!")
             self.solar = solar_array[:,1]/self.cfg.R**2.
             self.solar_sum = np.sum(self.solar)
         if(self.cfg.use_spec):
             #Load emissivity spectrum for substrate. 
             emiss_spec = np.loadtxt(emissivity_file)
             if(len(emiss_spec[:,0]) != len(self.wavenumbers) or np.max(emiss_spec[:,0]-self.wavenumbers)>0.1):
-                print("Warning: Emissivity spectrum file wavenumbers do not match scattering files!")
+                logger.warning("Emissivity spectrum file wavenumbers do not match scattering files!")
             self.emiss_base = emiss_spec[:,1]
         #Determine TIR wavenumber range for uniform properties case
         if(self.uniform_props):
@@ -227,7 +233,7 @@ class DisortRTESolver:
                 Et_scale = self.cfg.Et[1:self.grid.nlay_dust+1]/Et_mean
             else:
                 Et_scale = self.cfg.Et/Et_mean
-            print("Multi_wave mean Et rescaled to user input value!")
+            logger.info("Multi_wave mean Et rescaled to user input value.")
         else:
             Et_scale = 1.0
         #print(f"Multi_wave mean Et = {Et_scale*Et_mean}")
@@ -423,7 +429,7 @@ class DisortRTESolver:
             if(self.n_cols>1):
                 self.btemp[:] = torch.from_numpy(T[-1,:])
                 if(np.any(T[-1,:]<0)):
-                    print('Negative temperatures passed to disort. Aborting run.')
+                    logger.error('Negative temperatures passed to disort. Aborting run.')
                     return
             else:
                 self.btemp.fill_(T[-1])
@@ -495,54 +501,121 @@ class DisortRTESolver:
         # 6.	ALBMED(iu) - Albedo of the medium as a function of incident beam angle cosine UMU(IU)  (IBCND = 1 case only)
         # 7.	TRNMED(iu) - Transmissivity of the medium as a function of incident beam angle cosine UMU(IU)  (IBCND = 1 case only)
 
-        # Up stream minus down stream rough calculation of flux divergence. Not as accurate as what disort provides. 
-        F_net = result[:,:,:,0] - result[:,:,:,1] #[nwave, ncol, ndepth,up/down]
-        # Calculate heating rate as flux divergence
-        Q_rad_simple = np.diff(F_net.numpy()) / self.grid.dtau
-        if self.is_multi_wave:
-            #Sum over the different wavelengths. 
-            Q_rad_simple = np.sum(Q_rad_simple,axis=0)
-        Q_rad_simple = np.squeeze(Q_rad_simple)
         if(self.output_radiance):
-            #Just return the radiance as viewed by the observer, currently fixed at zenith. 
+            #Just return the radiance as viewed by the observer, currently fixed at zenith.
             rad = self.ds.gather_rad() #rad[nwave,ncol,ndepth,n_obs_direction mu, n_obs_direction phi]
             return(rad[:,:,0,:,:],fl_up)
         else:
-            # #Get flux divergence. This method didn't work well for very slow rotators (e.g., the Moon). Let to fluxes very deep that shouldn't exist. 
-            flx = self.ds.gather_flx() #flx[nwave,ncol,ndepth,8 properties] See table above for list of properties. 
-            # if self.is_multi_wave:
-            #     #Summation of values from different wavelength bins
-            #     flux_divergence = flx[:,:,:,3]
-            #     Q_rad = torch.sum(flux_divergence,dim=0)
-            # else:
-            #     Q_rad = flx[0,:,:,3] #returns flux divergence Qrad[ncol,ndepth_boundaries]
+            flx = self.ds.gather_flx() #flx[nwave,ncol,ndepth,8 properties] See table above for list of properties.
+
+            if self.cfg.use_exact_flux_divergence:
+                # Use DISORT's exact analytic flux divergence d(net flux)/d(optical depth) (DFDT output, index 3).
+                # Note: This method has been observed to produce anomalous deep heating for very slow rotators (e.g., the Moon).
+                if self.is_multi_wave:
+                    Q_rad = torch.sum(flx[:,:,:,3], dim=0).numpy()
+                else:
+                    Q_rad = flx[0,:,:,3].numpy()
+                Q_rad = np.squeeze(Q_rad)
+                # Interpolate from boundary points to layer centers
+                if self.n_cols == 1:
+                    Q_rad_layers = np.interp(self.grid.x_RTE, self.grid.x_boundaries, Q_rad)
+                else:
+                    Q_rad_layers = np.vstack([
+                        np.interp(self.grid.x_RTE, self.grid.x_boundaries, Q_rad[col,:])
+                        for col in range(self.n_cols)
+                    ])
+            else:
+                # Finite-difference approximation of flux divergence from net flux.
+                # More robust for slow rotators but less accurate than exact method.
+                F_net = result[:,:,:,0] - result[:,:,:,1] #[nwave, ncol, ndepth,up/down]
+                Q_rad_layers = np.diff(F_net.numpy()) / self.grid.dtau
+                if self.is_multi_wave:
+                    Q_rad_layers = np.sum(Q_rad_layers, axis=0)
+                Q_rad_layers = np.squeeze(Q_rad_layers)
+
             if(self.n_cols==1):
-                #Q_rad_interp = np.interp(self.grid.x_RTE,self.grid.x_boundaries,Q_rad[0,:])
                 source = np.zeros(self.grid.x_num)
-                source[1:self.grid.nlay_dust+1] = Q_rad_simple #used to be Q_rad_interp here. 
+                source[1:self.grid.nlay_dust+1] = Q_rad_layers
                 source_term = source * self.grid.K * self.cfg.q
                 if(not self.cfg.single_layer):
-                    #Two-layer mode. Need to add terms for the boundary. 
-                    #emission = np.pi*np.sum(planck_wn_integrated(self.wn_bins,T_interface)*self.emiss_base)
-                    #Radiative flux source term at the rock/dust boundary. They are not multipled by Kq because they are not volumetric. 
-                    #Terms on right are down direct-beam flux + down diffuse flux - up diffuse flux. 
+                    #Two-layer mode: radiative flux source term at the rock/dust boundary.
+                    #Terms on right are down direct-beam flux + down diffuse flux - up diffuse flux.
                     source_term[self.grid.nlay_dust+1] = torch.sum((flx[:,0,-1,0] + flx[:,0,-1,1] - flx[:,0,-1,2]),dim=0)
             else:
-                #Multiple columns. Return source_term in format [n_colns, n_depth]
-                #Q_rad_interp = interpn((self.grid.x_boundaries,),Q_rad.numpy().swapaxes(0,1),self.grid.x_RTE,bounds_error=False,fill_value=None)
-                # Q_rad_interp = np.vstack([
-                #     np.interp(self.grid.x_RTE, self.grid.x_boundaries, Q_rad[col,:])
-                #     for col in range(self.n_cols)
-                # ])
+                #Multiple columns. Return source_term in format [n_cols, n_depth]
                 source = np.zeros((self.n_cols,self.grid.x_num))
-                source[:,1:self.grid.nlay_dust+1] = Q_rad_simple #used to be Q_rad_interp here. 
+                source[:,1:self.grid.nlay_dust+1] = Q_rad_layers
                 source_term = source * self.grid.K * self.cfg.q
                 if(not self.cfg.single_layer):
-                    #emission = np.pi*np.sum(planck_wn_integrated(self.wn_bins,T_interface)*self.emiss_base)
-                    #Radiative flux source term at the rock/dust boundary. They are not multipled by Kq because they are not volumetric. 
-                    #Terms on right are down direct-beam flux + down diffuse flux - up diffuse flux. 
+                    #Two-layer mode: radiative flux source term at the rock/dust boundary.
                     source_term[:,self.grid.nlay_dust+1] = torch.sum((flx[:,:,-1,0] + flx[:,:,-1,1] - flx[:,:,-1,2]),dim=0)
+            # Record training data if enabled
+            if self._record_mode:
+                n_depth = self.grid.nlay_dust
+                T_profile = np.array(T[1:n_depth + 1], dtype=np.float32)
+                mu_val = float(mu) if np.isscalar(mu) else float(mu[0])
+                F_val = float(F) if np.isscalar(F) else float(F[0])
+                self._record_buffer['T_profile'].append(T_profile)
+                self._record_buffer['mu'].append(mu_val)
+                self._record_buffer['F'].append(F_val)
+                self._record_buffer['ssalb'].append(float(self.cfg.ssalb_therm))
+                self._record_buffer['g'].append(float(self.cfg.g_therm))
+                self._record_buffer['tau_total'].append(float(self.grid.x_boundaries[-1]))
+                src = np.array(source_term[1:n_depth + 1], dtype=np.float32)
+                self._record_buffer['source_term'].append(src)
+                self._record_buffer['flux_up'].append(float(fl_up))
+                if len(self._record_buffer['mu']) >= self._record_flush_interval:
+                    self.flush_recording()
+
             return source_term, fl_up
+
+    def flush_recording(self):
+        """Flush the recording buffer to an HDF5 file."""
+        if not self._record_mode or len(self._record_buffer['mu']) == 0:
+            return
+
+        import h5py
+        n = len(self._record_buffer['mu'])
+        file_path = self._record_file
+
+        T_profiles = np.array(self._record_buffer['T_profile'])
+        source_terms = np.array(self._record_buffer['source_term'])
+        mu_arr = np.array(self._record_buffer['mu'], dtype=np.float32)
+        F_arr = np.array(self._record_buffer['F'], dtype=np.float32)
+        ssalb_arr = np.array(self._record_buffer['ssalb'], dtype=np.float32)
+        g_arr = np.array(self._record_buffer['g'], dtype=np.float32)
+        tau_arr = np.array(self._record_buffer['tau_total'], dtype=np.float32)
+        flux_arr = np.array(self._record_buffer['flux_up'], dtype=np.float32)
+
+        total_records = 0
+        with h5py.File(file_path, 'a') as f:
+            # Create or extend datasets
+            for name, data in [
+                ('inputs/T_profile', T_profiles),
+                ('inputs/mu', mu_arr),
+                ('inputs/F', F_arr),
+                ('inputs/ssalb', ssalb_arr),
+                ('inputs/g', g_arr),
+                ('inputs/tau_total', tau_arr),
+                ('outputs/source_term', source_terms),
+                ('outputs/flux_up', flux_arr),
+            ]:
+                if name in f:
+                    ds = f[name]
+                    old_len = ds.shape[0]
+                    ds.resize(old_len + len(data), axis=0)
+                    ds[old_len:] = data
+                else:
+                    maxshape = (None,) + data.shape[1:]
+                    f.create_dataset(name, data=data, maxshape=maxshape,
+                                     chunks=True, compression='gzip')
+            total_records = f['inputs/mu'].shape[0]
+
+        logger.info(f"Flushed {n} DISORT records to {file_path} (total: {total_records})")
+
+        # Clear buffer
+        for key in self._record_buffer:
+            self._record_buffer[key] = []
 
 
 

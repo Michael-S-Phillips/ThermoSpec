@@ -1,9 +1,12 @@
+import logging
 import numpy as np
 from config import SimulationConfig
 from stencils import (
     fd1d_heat_implicit_diagonal_nonuniform_kieffer,
     fd1d_heat_implicit_matrix_nonuniform_kieffer
 )
+
+logger = logging.getLogger(__name__)
 
 # -----------------------------------------------------------------------------
 # File: grid.py
@@ -301,7 +304,7 @@ class LayerGrid:
                 return False
         else:
             # First call - should not happen if initialization was done correctly
-            print("Warning: T_last_cp_update not initialized")
+            logger.warning("T_last_cp_update not initialized")
             return False
     
     def _update_fd_matrix(self, dens=None, heat=None, cond=None):
@@ -391,11 +394,11 @@ class LayerGrid:
                 #Need to update q, which was conputed in the config init. 
                 cfg.q = 1.0 / (self.k_depth * cfg.Et) #Depth-dependent q array of size x_num. 
                 cfg.q_bound = np.interp(self.x_boundaries,self.x,cfg.q) #Need a version of q array at layer boundaries for hapke. 
-                print(f"Using depth-dependent properties:")
-                print(f"  Surface density: {self.rho_depth[0]:.1f} kg/m³")
-                print(f"  Deep density: {self.rho_depth[-1]:.1f} kg/m³")
-                print(f"  Surface conductivity: {self.k_depth[0]:.2e} W/m/K")
-                print(f"  Deep conductivity: {self.k_depth[-1]:.2e} W/m/K")
+                logger.info(f"Using depth-dependent properties: "
+                           f"Surface density: {self.rho_depth[0]:.1f} kg/m³, "
+                           f"Deep density: {self.rho_depth[-1]:.1f} kg/m³, "
+                           f"Surface conductivity: {self.k_depth[0]:.2e} W/m/K, "
+                           f"Deep conductivity: {self.k_depth[-1]:.2e} W/m/K")
             else:
                 # Use uniform properties
                 K[:] = K_dust
@@ -443,7 +446,7 @@ class LayerGrid:
             dt = cfg.P * cfg.ndays / (t_num - 1)
             self.steps_per_day = cfg.tsteps_day
             self.dt = dt
-        print(f"Time step: {dt:.6f} s, Steps per day: {self.steps_per_day}")
+        logger.info(f"Time step: {dt:.6f} s, Steps per day: {self.steps_per_day}")
 
         # Finite-difference stencil (non-uniform)
         A1 = (
@@ -474,8 +477,8 @@ class LayerGrid:
                 c0, c1, c2, c3, c4 = cfg.cp_coeffs
                 T = T_initial
                 heat_temp_dependent = c0 + c1*T + c2*T**2 + c3*T**3 + c4*T**4
-                print(f"Initial temperature-dependent heat capacity calculated (T={cfg.T_bottom:.1f}K)")
-                print(f"  cp range: {heat_temp_dependent.min():.1f} - {heat_temp_dependent.max():.1f} J/kg/K")
+                logger.info(f"Initial temperature-dependent heat capacity calculated (T={cfg.T_bottom:.1f}K), "
+                           f"cp range: {heat_temp_dependent.min():.1f} - {heat_temp_dependent.max():.1f} J/kg/K")
                 self.heat = heat_temp_dependent.copy()
                 
             if cfg.temp_dependent_k:
@@ -501,8 +504,8 @@ class LayerGrid:
                     cfg.q = 1/ (self.cond * cfg.Et)                
                     cfg.q_bound = np.interp(self.x_boundaries,self.x,cfg.q)
                 
-                print(f"Initial temperature-dependent thermal conductivity calculated (T={cfg.T_bottom:.1f}K)")
-                print(f"  k range: {k_temp_dependent.min():.2e} - {k_temp_dependent.max():.2e} W/m/K")
+                logger.info(f"Initial temperature-dependent thermal conductivity calculated (T={cfg.T_bottom:.1f}K), "
+                           f"k range: {k_temp_dependent.min():.2e} - {k_temp_dependent.max():.2e} W/m/K")
                 
                 # Pass the diffusion units version to matrix update
                 k_temp_dependent = k_temp_dependent_fd
@@ -514,7 +517,7 @@ class LayerGrid:
                 
             # Store the temperature field from when properties were last updated
             self.T_last_cp_update = T_initial.copy()
-            print("Temperature-dependent property tracking initialized")
+            logger.info("Temperature-dependent property tracking initialized")
         else:
             self.temp_dependent_enabled = False
         

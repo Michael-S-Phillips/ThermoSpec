@@ -1,5 +1,12 @@
 from dataclasses import dataclass, field
+from pathlib import Path
+import logging
 import numpy as np
+
+logger = logging.getLogger(__name__)
+
+# Default data root is the ThermoSpec package directory
+_PACKAGE_DIR = Path(__file__).parent
 
 # -----------------------------------------------------------------------------
 # File: config.py
@@ -25,7 +32,7 @@ class SimulationConfig:
     freq_out: int = 48              # Number of outputs per diurnal cycle. 
     last_day: bool = True            # If True, only output last day of simulation. Otherwise, output data from all days.
     compute_observer_radiance: bool = False  # DEPRECATED: Use radiance_processor module for post-processing instead
-    observer_mu: int = np.cos(np.radians(0.0)) #Observer cosine angle for radiance post-processing 
+    observer_mu: float = np.cos(np.radians(0.0)) #Observer cosine angle for radiance post-processing
     
     # DISORT Spectral Mode Configuration
     thermal_evolution_mode: str = 'two_wave'    # Thermal evolution solver mode: 'two_wave', 'multi_wave', 'hybrid'
@@ -59,8 +66,8 @@ class SimulationConfig:
     compute_crater_radiance: bool = False  # Calculate crater radiance as seen by observers. Computationally expensive!
     #observer_vectors: list = field(default_factory=lambda: [[0, 0, 1],[0.5,0,1],[0.7,0,1], [-0.5,0,1], [-0.7,0,1]])  # List of [x,y,z] observer direction vectors (default: overhead)
     observer_vectors: list = field(default_factory=lambda: [[0, 0, 1],[1,0,1],[0,1,1]])
-    crater_mesh: str = '/Users/ryan/Research/RT_models/RT_thermal_model/Roughness_files/new_crater2.txt'
-    crater_selfheating: str = '/Users/ryan/Research/RT_models/RT_thermal_model/Roughness_files/new_crater2_selfheating_list.txt'
+    crater_mesh: str = field(default_factory=lambda: str(_PACKAGE_DIR / 'Roughness_files' / 'new_crater2.txt'))
+    crater_selfheating: str = field(default_factory=lambda: str(_PACKAGE_DIR / 'Roughness_files' / 'new_crater2_selfheating_list.txt'))
 
     # Dust (or top layer) material properties
     single_layer: bool = True        # use single-layer model instead of two-layer. If single layer, only dust properties are used. 
@@ -123,23 +130,22 @@ class SimulationConfig:
     nmom: int = 4            # Number of moments to phase function. But be >= nstr. Recommended ≥4
     nstr: int = 4            # Number of streams for disort discrete ordinate method. Recommended ≥4
     hybrid_wavelength_cutoff: float = 3.33     # Cutoff wavelength (μm) between thermal (multi-wave) and visible (broadband) in hybrid mode 
-    #folder: str = "/Users/ryan/Research/RT_models/RT_thermal_model/optical_constants/Quartz_5micron_30wns/pack_frac_0.35/output" #path to scattering table files
-    mie_file: str = "/Users/ryan/Research/RT_models/RT_thermal_model/Optical_props/quartz_spitzer_combined_15um_mie.txt"   #Table of values from Mie code.  
-    solar_spectrum_file: str = '/Users/ryan/Research/RT_models/RT_thermal_model/Optical_props/solar_integrated_32.txt'  #integrates solar spectrum. Must have same spectral sampling as scattering matrix. 
-    wn_bounds: str = '/Users/ryan/Research/RT_models/RT_thermal_model/Optical_props/quartz_spitzer_wn_bounds.txt' #Wavenumber bounds for input files.
-    substrate_spectrum: str = '/Users/ryan/Research/RT_models/RT_thermal_model/Optical_props/Orgueil_P11442_VEH_32wns.txt' #Bennu emissivity spectrum for substrate
+    mie_file: str = field(default_factory=lambda: str(_PACKAGE_DIR / 'Optical_props' / 'quartz_spitzer_combined_15um_mie.txt'))
+    solar_spectrum_file: str = field(default_factory=lambda: str(_PACKAGE_DIR / 'Optical_props' / 'solar_integrated_32.txt'))
+    wn_bounds: str = field(default_factory=lambda: str(_PACKAGE_DIR / 'Optical_props' / 'quartz_spitzer_wn_bounds.txt'))
+    substrate_spectrum: str = field(default_factory=lambda: str(_PACKAGE_DIR / 'Optical_props' / 'Orgueil_P11442_VEH_32wns.txt'))
     use_spec: bool = False     #Use emissivity spectrum for substrate. If false, uses global reflectivity value R_base
     fill_frac: float = 0.63   #Fill fraction for particles. 
     radius: float = 15.e-6    #Particle radius in meters. 
     scale_Et: bool = False     #Scale the wavelenth-dependent Et values so that the mean is equal to cfg.Et. 
     
-    #Output settings. Choose files with desired multiwave spectral sampling for calculating radiance output. 
-    mie_file_out: str = "/Users/ryan/Research/RT_models/RT_thermal_model/Optical_props/quartz_spitzer_combined_15um_mie.txt"    
-    solar_spectrum_file_out: str = '/Users/ryan/Research/RT_models/RT_thermal_model/Optical_props/solar_integrated_216.txt'  #integrates solar spectrum. Must have same spectral sampling as scattering matrix. 
-    wn_bounds_out: str = '/Users/ryan/Research/RT_models/RT_thermal_model/Optical_props/quartz_spitzer_wn_bounds.txt' #Wavenumber bounds for output files.
-    substrate_spectrum_out: str = '/Users/ryan/Research/RT_models/RT_thermal_model/Optical_props/sabel_enstatite.txt' #Bennu emissivity spectrum for substrate
-    otesT1_out: str = '/Users/ryan/Research/RT_models/RT_thermal_model/Optical_props/Bennu_Type1_216wns.txt' #Output file for OTES T2 radiance outputs.
-    otesT2_out: str = '/Users/ryan/Research/RT_models/RT_thermal_model/Optical_props/Bennu_Type2_216wns.txt' #Output file for OTES T2 radiance outputs.
+    #Output settings. Choose files with desired multiwave spectral sampling for calculating radiance output.
+    mie_file_out: str = field(default_factory=lambda: str(_PACKAGE_DIR / 'Optical_props' / 'quartz_spitzer_combined_15um_mie.txt'))
+    solar_spectrum_file_out: str = field(default_factory=lambda: str(_PACKAGE_DIR / 'Optical_props' / 'solar_integrated_216.txt'))
+    wn_bounds_out: str = field(default_factory=lambda: str(_PACKAGE_DIR / 'Optical_props' / 'quartz_spitzer_wn_bounds.txt'))
+    substrate_spectrum_out: str = field(default_factory=lambda: str(_PACKAGE_DIR / 'Optical_props' / 'sabel_enstatite.txt'))
+    otesT1_out: str = field(default_factory=lambda: str(_PACKAGE_DIR / 'Optical_props' / 'Bennu_Type1_216wns.txt'))
+    otesT2_out: str = field(default_factory=lambda: str(_PACKAGE_DIR / 'Optical_props' / 'Bennu_Type2_216wns.txt'))
     nstr_out: int = 16        #Number of streams for calculating radiance outputs. ≥16 recommended. 
     nmom_out: int = 16        #Number of scattering moments for radiance outputs. Must be ≥ nstr_out
 
@@ -166,7 +172,17 @@ class SimulationConfig:
     bvp_max_iter: float = 300        # max iterations for BVP solver
     T_surf_tol: float = 1.0e-4       # tolerance for surface temperature convergence
     T_surf_max_iter: int = 50        # max iterations for surface temperature convergence
-    disort_space_temp: float = 0.0 # Background temperature (space, cold shroud) for disort. 
+    use_exact_flux_divergence: bool = False  # Use DISORT's exact analytic flux divergence (DFDT) instead of finite-difference approximation. May cause issues for very slow rotators.
+    disort_space_temp: float = 0.0 # Background temperature (space, cold shroud) for disort.
+
+    # Neural network surrogate settings
+    use_nn_surrogate: bool = False    # Use NN surrogate instead of DISORT for thermal evolution
+    nn_model_path: str = ''           # Path to trained NN surrogate model checkpoint
+    nn_norm_path: str = ''            # Path to normalization parameters
+    nn_validation_interval: int = 100 # Run real DISORT every N calls for validation
+    nn_error_threshold: float = 0.01  # Max allowed relative flux error before DISORT fallback
+    record_disort_data: bool = False  # Record DISORT I/O pairs to HDF5 for NN training
+    disort_record_file: str = ''      # Path for DISORT recording output HDF5 file
     # layer thickness values only used for manual spacing (auto_thickness=False)
     dust_lthick: float = 0.02        # dust node spacing (tau units), only used if auto_thickness is False.
     rock_lthick: float = 0.0025      # rock node spacing (m), only used if auto_thickness is False.
@@ -223,8 +239,8 @@ class SimulationConfig:
         if(self.k_dust_auto and not self.use_RTE):
             #Add the estimation for the radiative term from Hapke's book, equation 16.31. 
             self.k_dust += (4.0/self.Et)*self.sigma*self.T_bottom**3.
-            print(f"Using auto-calculated dust thermal conductivity: {self.k_dust:.2e} W/m/K")
-            print(f"Thermal inertia is {np.sqrt(self.k_dust*self.rho_dust*self.cp_dust)}")
+            logger.info(f"Using auto-calculated dust thermal conductivity: {self.k_dust:.2e} W/m/K")
+            logger.info(f"Thermal inertia is {np.sqrt(self.k_dust*self.rho_dust*self.cp_dust)}")
         # Rock skin depth (in tau units)
         self.rock_skin_depth = np.sqrt(
             self.k_rock * self.Et**2. * self.P / (self.rho_rock * self.cp_rock * np.pi)

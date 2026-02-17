@@ -6,6 +6,7 @@ with automatic data saving for post-processing workflows.
 """
 
 import numpy as np
+import hashlib
 from typing import Dict, Any, Optional
 from pathlib import Path
 import sys
@@ -96,8 +97,8 @@ class ThermalSimulator:
             output_dir.mkdir(exist_ok=True)
             
             # Generate unique filename based on configuration
-            config_hash = hash(str(sorted(self.config.__dict__.items())))
-            self.thermal_output_path = output_dir / f"thermal_sim_{abs(config_hash):08x}.h5"
+            config_hash = hashlib.md5(str(sorted(self.config.__dict__.items())).encode()).hexdigest()[:8]
+            self.thermal_output_path = output_dir / f"thermal_sim_{config_hash}.h5"
         
         # Create simulation data dictionary using the contained simulator
         simulation_data = create_simulation_data_dict(self.simulator)

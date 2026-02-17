@@ -11,8 +11,84 @@ from pathlib import Path
 from dataclasses import asdict
 from typing import Dict, Any, List, Union
 import copy
+import ast
 
 from config import SimulationConfig
+
+
+def _safe_eval_numpy_expr(expr: str):
+    """
+    Safely evaluate a numpy expression string like 'np.radians(30)'.
+
+    Only allows calls to numpy math functions (radians, cos, sin, etc.)
+    with numeric literal arguments. Does NOT use eval().
+    """
+    expr = expr.strip()
+
+    # Parse the expression as AST
+    try:
+        tree = ast.parse(expr, mode='eval')
+    except SyntaxError:
+        raise ValueError(f"Cannot parse expression: {expr}")
+
+    return _eval_ast_node(tree.body)
+
+
+def _eval_ast_node(node):
+    """Recursively evaluate a safe subset of AST nodes."""
+    # Numeric literals
+    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+        return node.value
+
+    # Unary operators (e.g., -1.0)
+    if isinstance(node, ast.UnaryOp):
+        if isinstance(node.op, ast.USub):
+            return -_eval_ast_node(node.operand)
+        elif isinstance(node.op, ast.UAdd):
+            return +_eval_ast_node(node.operand)
+
+    # Binary operators (e.g., 2.7/(350.0**3.))
+    if isinstance(node, ast.BinOp):
+        left = _eval_ast_node(node.left)
+        right = _eval_ast_node(node.right)
+        ops = {
+            ast.Add: lambda a, b: a + b,
+            ast.Sub: lambda a, b: a - b,
+            ast.Mult: lambda a, b: a * b,
+            ast.Div: lambda a, b: a / b,
+            ast.Pow: lambda a, b: a ** b,
+        }
+        op_type = type(node.op)
+        if op_type in ops:
+            return ops[op_type](left, right)
+
+    # Function calls: only allow np.XXX(args)
+    if isinstance(node, ast.Call):
+        if (isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == 'np'):
+
+            allowed_funcs = {
+                'radians', 'degrees', 'cos', 'sin', 'tan',
+                'arccos', 'arcsin', 'arctan', 'sqrt', 'log', 'log10',
+                'exp', 'abs', 'pi',
+            }
+            func_name = node.func.attr
+            if func_name not in allowed_funcs:
+                raise ValueError(f"Disallowed numpy function: np.{func_name}")
+
+            func = getattr(np, func_name)
+            args = [_eval_ast_node(arg) for arg in node.args]
+            return func(*args)
+
+    # Attribute access for np.pi, np.e
+    if isinstance(node, ast.Attribute):
+        if isinstance(node.value, ast.Name) and node.value.id == 'np':
+            allowed_constants = {'pi', 'e', 'inf'}
+            if node.attr in allowed_constants:
+                return getattr(np, node.attr)
+
+    raise ValueError(f"Unsupported expression node: {ast.dump(node)}")
 
 
 class ConfigManager:
@@ -71,8 +147,8 @@ class ConfigManager:
                 # Handle numpy expressions in YAML (e.g., "np.radians(30)")
                 if isinstance(value, str) and value.startswith('np.'):
                     try:
-                        value = eval(value)
-                    except:
+                        value = _safe_eval_numpy_expr(value)
+                    except (ValueError, TypeError):
                         pass  # Keep as string if evaluation fails
                 flattened[key] = value
                 
@@ -139,8 +215,8 @@ class ConfigManager:
                 # Handle numpy expressions
                 if value.startswith('np.'):
                     try:
-                        processed[key] = eval(value)
-                    except:
+                        processed[key] = _safe_eval_numpy_expr(value)
+                    except (ValueError, TypeError):
                         processed[key] = value
                 else:
                     processed[key] = value
@@ -324,8 +400,8 @@ def create_default_base_config(output_path: str, planetary_body: str = "generic"
             'compute_crater_radiance': config_dict['compute_crater_radiance'],
             # Better formatting for observer vectors - convert to more readable format
             'observer_vectors': _format_observer_vectors(config_dict['observer_vectors']),
-            'crater_mesh': config_dict.get('crater_mesh', '/Users/ryan/Research/RT_models/RT_thermal_model/Roughness_files/new_crater2.txt'),
-            'crater_selfheating': config_dict.get('crater_selfheating', '/Users/ryan/Research/RT_models/RT_thermal_model/Roughness_files/new_crater2_selfheating_list.txt')
+            'crater_mesh': config_dict.get('crater_mesh'),
+            'crater_selfheating': config_dict.get('crater_selfheating')
         },
         
         'material_properties_dust': {
