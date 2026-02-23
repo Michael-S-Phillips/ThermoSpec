@@ -149,6 +149,18 @@ def run_single_recording(sim_id: int, param_overrides: dict,
         else:
             logger.warning(f"Sim {sim_id}: unknown config key '{key}', skipping")
 
+    # Auto-compute subsample rate to target ~20k records per simulation.
+    # This keeps dataset sizes manageable while covering the full diurnal cycle.
+    target_records = 20000
+    if not hasattr(cfg, 'disort_record_subsample') or cfg.disort_record_subsample <= 1:
+        # Rough estimate of total DISORT calls: steps_per_day * ndays
+        # auto_dt with dtfac=50 gives dt ~ dtfac * min(lthick/K/Et)
+        # For lunar (P~2.4e6, dt~0.05) -> ~43M steps/day -> subsample ~4300
+        # For asteroid (P~15k, dt~0.05) -> ~300k steps/day -> subsample ~45
+        est_steps = cfg.P * cfg.ndays / 0.05  # rough: dt ~ 0.05s for typical grids
+        cfg.disort_record_subsample = max(1, int(est_steps / target_records))
+        logger.info(f"Sim {sim_id}: auto subsample rate = {cfg.disort_record_subsample}")
+
     try:
         sim = Simulator(cfg)
         sim.run()

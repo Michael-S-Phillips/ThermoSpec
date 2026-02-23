@@ -35,7 +35,10 @@ class DisortRTESolver:
             }
             self._record_file = config.disort_record_file
             self._record_flush_interval = 10000
-            logger.info(f"DISORT recording enabled -> {self._record_file}")
+            self._record_call_count = 0
+            self._record_subsample = getattr(config, 'disort_record_subsample', 1)
+            logger.info(f"DISORT recording enabled -> {self._record_file} "
+                        f"(subsample={self._record_subsample})")
         
         # Determine effective mode for this instance
         self._determine_effective_mode()
@@ -549,8 +552,11 @@ class DisortRTESolver:
                 if(not self.cfg.single_layer):
                     #Two-layer mode: radiative flux source term at the rock/dust boundary.
                     source_term[:,self.grid.nlay_dust+1] = torch.sum((flx[:,:,-1,0] + flx[:,:,-1,1] - flx[:,:,-1,2]),dim=0)
-            # Record training data if enabled
+            # Record training data if enabled (with optional subsampling)
             if self._record_mode:
+                self._record_call_count += 1
+                if self._record_call_count % self._record_subsample != 0:
+                    return source_term, fl_up
                 n_depth = self.grid.nlay_dust
                 T_profile = np.array(T[1:n_depth + 1], dtype=np.float32)
                 mu_val = float(mu) if np.isscalar(mu) else float(mu[0])

@@ -183,6 +183,7 @@ class SimulationConfig:
     nn_error_threshold: float = 0.01  # Max allowed relative flux error before DISORT fallback
     record_disort_data: bool = False  # Record DISORT I/O pairs to HDF5 for NN training
     disort_record_file: str = ''      # Path for DISORT recording output HDF5 file
+    disort_record_subsample: int = 1  # Record every Nth DISORT call (1=all, 10=every 10th)
     # layer thickness values only used for manual spacing (auto_thickness=False)
     dust_lthick: float = 0.02        # dust node spacing (tau units), only used if auto_thickness is False.
     rock_lthick: float = 0.0025      # rock node spacing (m), only used if auto_thickness is False.
