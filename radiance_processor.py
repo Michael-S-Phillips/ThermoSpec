@@ -214,9 +214,9 @@ class CraterRadianceProcessor:
         total_projected_area = 0.0
         
         # Calculate radiance for each visible facet using per-facet DISORT approach
-        print(f"Computing crater radiance for {len(crater_mesh.normals)} facets...")
+        #print(f"Computing crater radiance for {len(crater_mesh.normals)} facets...")
         for i in range(len(crater_mesh.normals)):
-            print(i)
+            #print(i)
             # Skip facets that are not visible or facing away from observer
             if visibility[i] <= 0 or facet_mu[i] <= 0:
                 continue
@@ -334,6 +334,113 @@ class CraterRadianceProcessor:
             )
             
         return radiances
+
+
+# ------------------------ Non-RTE Crater Radiance Helpers ------------------------
+
+def observer_vector_from_emis_azim(emis_deg: float, azim_deg: float) -> np.ndarray:
+    """
+    Build a unit observer vector from emission and azimuth angles in degrees.
+    Convention matches the 3D model: +z is local surface normal.
+    """
+    emis = np.radians(emis_deg)
+    azim = np.radians(azim_deg)
+    x = np.sin(emis) * np.cos(azim)
+    y = np.sin(emis) * np.sin(azim)
+    z = np.cos(emis)
+    v = np.array([x, y, z], dtype=float)
+    n = np.linalg.norm(v)
+    return v / n if n > 0 else np.array([0.0, 0.0, 1.0], dtype=float)
+
+
+def planck_band_integrated_wn(wn_low: float, wn_high: float, T: np.ndarray, n_samples: int = 9) -> np.ndarray:
+    """
+    Integrate Planck spectral radiance over a wavenumber band [wn_low, wn_high] (cm^-1).
+    Vectorized over T. Uses fixed sampling and trapezoidal integration for speed.
+    Returns W m^-2 sr^-1 over the band.
+    """
+    T = np.asarray(T, dtype=float)
+    # Sample points in cm^-1
+    wn = np.linspace(wn_low, wn_high, n_samples, dtype=float)
+    # Convert to m^-1 for Planck function
+    wn_m = wn * 100.0
+    h = 6.62607015e-34  # J s
+    c = 2.99792458e8    # m/s
+    k = 1.380649e-23    # J/K
+
+    # Broadcast to [n_samples, ...,]
+    T_b = T  # keep original dimensions, no extra leading axis
+    wn_m_b = wn_m.reshape((-1,) + (1,) * T_b.ndim)
+
+    # Spectral radiance per m^-1
+    B = (2 * h * c**2 * wn_m_b**3) / (np.exp((h * c * wn_m_b) / (k * T_b)) - 1.0)
+    # Integrate over wn in cm^-1. Trapezoidal rule; convert d(wn_cm^-1) -> d(wn_m^-1) by factor 100
+    integral_cm = np.trapz(B, wn, axis=0)
+    return integral_cm * 100.0
+
+
+def crater_radiance_10um_from_Tsurf(crater_mesh,
+                                    crater_shadowtester,
+                                    T_surf_facets_time: np.ndarray,
+                                    emis_deg: float,
+                                    azim_deg: float,
+                                    wn_center: float = 1000.0,
+                                    band_halfwidth: float = 2.5) -> np.ndarray:
+    """
+    Compute band-integrated crater radiance around 10 µm from facet surface temperatures (non-RTE).
+
+    Args:
+        crater_mesh: CraterMesh object with normals and areas
+        crater_shadowtester: ShadowTester for visibility
+        T_surf_facets_time: [n_facets, n_time] facet kinetic surface temperatures
+        emis_deg, azim_deg: observer angles (degrees)
+        wn_center: center wavenumber (cm^-1)
+        band_halfwidth: half-width (cm^-1) around center
+
+    Returns:
+        L10: [n_time] band-integrated radiance (W m^-2 sr^-1)
+    """
+    # Orient temperatures to [n_facets, n_time]
+    n_facets = len(crater_mesh.normals)
+    if T_surf_facets_time.ndim != 2:
+        raise ValueError("T_surf_facets_time must be 2D [facets, time] or [time, facets]")
+    if T_surf_facets_time.shape[0] == n_facets:
+        T_facets_time = T_surf_facets_time
+    elif T_surf_facets_time.shape[1] == n_facets:
+        T_facets_time = T_surf_facets_time.T
+    else:
+        raise ValueError(f"T_surf_facets_time shape {T_surf_facets_time.shape} incompatible with n_facets={n_facets}")
+
+    # Observer vector and static geometry factors
+    obs_vec = observer_vector_from_emis_azim(emis_deg, azim_deg)
+    normals = crater_mesh.normals  # [n_facets, 3]
+    areas = crater_mesh.areas      # [n_facets]
+    mu = normals @ obs_vec
+    mu[mu < 0.0] = 0.0
+    visibility = crater_shadowtester.illuminated_facets(obs_vec)  # fractional
+
+    # Projected area weights (constant in time for fixed geometry)
+    weights = areas * mu * visibility  # [n_facets]
+    denom = np.sum(weights)
+    n_time = T_facets_time.shape[1]
+    if denom <= 0:
+        return np.zeros(n_time, dtype=float)
+
+    # Planck-integrated band per facet, per time
+    wn_low = wn_center - band_halfwidth
+    wn_high = wn_center + band_halfwidth
+    # Vectorized over time by transposing to [n_time, n_facets]
+    T_ft = T_facets_time.T  # [n_time, n_facets]
+    # Compute band radiance for all T in one go
+    L_ft = planck_band_integrated_wn(wn_low, wn_high, T_ft)  # [n_time, n_facets]
+    #L_ft = T_ft**4. #Alternative: use T^4 for effective brightness temperature
+
+    # Weighted, area-averaged radiance per time
+    L_time = (L_ft * weights.reshape((1, -1))).sum(axis=1) / denom
+
+    #Alternatively Calculate effective brigthness temperature
+    #L_time = ((L_ft * weights.reshape((1, -1))).sum(axis=1) / denom)**0.25
+    return L_time
 
 
 class RadianceProcessor:
@@ -669,9 +776,14 @@ class RadianceProcessor:
         cache_key = f"{observer_mu:.6f}_{observer_phi:.6f}_{spectral_mode}_{spectral_component or 'all'}"
         
         if cache_key not in self._disort_solvers:
+            # planck=True only for thermal-emission instances - a visible-only
+            # instance with planck=True would never receive solar flux (see
+            # disort_run's non-multi-wave branch), silently zeroing reflected
+            # sunlight in the visible radiance/flux output.
+            planck = spectral_component != 'visible_only'
             self._disort_solvers[cache_key] = DisortRTESolver(
-                self.config, self.grid, n_cols=1, 
-                output_radiance=True, planck=True,
+                self.config, self.grid, n_cols=1,
+                output_radiance=True, planck=planck,
                 observer_mu=observer_mu, observer_phi=observer_phi,
                 solver_mode=spectral_mode, spectral_component=spectral_component
             )

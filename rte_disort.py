@@ -372,12 +372,19 @@ class DisortRTESolver:
                         self.fbeam[:] = torch.from_numpy(self.solar*F)[:,None]
                     else:
                         self.fbeam[:] = torch.from_numpy(np.tile(self.solar[:,None],(1,self.n_cols))*np.tile(F,(self.nwave,1)))
-                else:
-                    # No solar spectrum loaded (e.g., hybrid thermal mode) - use broadband approximation
+                elif not self.planck:
+                    # No solar spectrum loaded and this is not a thermal-emission (planck)
+                    # instance - fall back to a broadband approximation (distribute flux evenly).
                     if self.n_cols==1:
                         self.fbeam[:] = F * self.cfg.J / self.nwave  # Distribute broadband flux evenly
                     else:
                         self.fbeam[:] = torch.from_numpy(np.tile((F * self.cfg.J / self.nwave)[None,:],(self.nwave,1)))
+                else:
+                    # Thermal-emission (planck) instances with no loaded solar spectrum
+                    # (e.g. hybrid_thermal) should never receive a direct solar beam - solar
+                    # heating is handled entirely by the separate broadband visible-band
+                    # solver in hybrid mode.
+                    self.fbeam.fill_(0.0)
             #temis = torch.full([len(self.wavenumbers)],1.0).unsqueeze(1)
             #if Q==None: 
                 #fisot = torch.tensor(np.zeros_like(self.wavenumbers)).unsqueeze(1)
@@ -504,7 +511,7 @@ class DisortRTESolver:
             Q_rad_simple = np.sum(Q_rad_simple,axis=0)
         Q_rad_simple = np.squeeze(Q_rad_simple)
         if(self.output_radiance):
-            #Just return the radiance as viewed by the observer, currently fixed at zenith. 
+            #Just return the radiance as viewed by the observer for given observer angles. 
             rad = self.ds.gather_rad() #rad[nwave,ncol,ndepth,n_obs_direction mu, n_obs_direction phi]
             return(rad[:,:,0,:,:],fl_up)
         else:

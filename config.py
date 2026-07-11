@@ -61,6 +61,7 @@ class SimulationConfig:
     observer_vectors: list = field(default_factory=lambda: [[0, 0, 1],[1,0,1],[0,1,1]])
     crater_mesh: str = '/Users/ryan/Research/RT_models/RT_thermal_model/Roughness_files/new_crater2.txt'
     crater_selfheating: str = '/Users/ryan/Research/RT_models/RT_thermal_model/Roughness_files/new_crater2_selfheating_list.txt'
+    crater_temp_dependent_properties: bool = False  # If True, crater facets each use their own temp-dependent matrices (slower, more accurate)
 
     # Dust (or top layer) material properties
     single_layer: bool = True        # use single-layer model instead of two-layer. If single layer, only dust properties are used. 
@@ -122,7 +123,7 @@ class SimulationConfig:
     # Note that nmom and nstr are usuall equal. 
     nmom: int = 4            # Number of moments to phase function. But be >= nstr. Recommended ≥4
     nstr: int = 4            # Number of streams for disort discrete ordinate method. Recommended ≥4
-    hybrid_wavelength_cutoff: float = 3.33     # Cutoff wavelength (μm) between thermal (multi-wave) and visible (broadband) in hybrid mode 
+    hybrid_wavelength_cutoff: float = 0.1     # Cutoff wavelength (μm) between thermal (multi-wave) and visible (broadband) in hybrid mode. Now that the thermal (multi-wave) instance never receives a direct solar beam (see rte_disort.py disort_run), this cutoff is purely a compute-efficiency knob (avoids "dead" thermal bands with negligible Planck emission), not a correctness requirement - set conservatively low so the multi-wave thermal band keeps essentially the whole Mie file by default.
     #folder: str = "/Users/ryan/Research/RT_models/RT_thermal_model/optical_constants/Quartz_5micron_30wns/pack_frac_0.35/output" #path to scattering table files
     mie_file: str = "/Users/ryan/Research/RT_models/RT_thermal_model/Optical_props/quartz_spitzer_combined_15um_mie.txt"   #Table of values from Mie code.  
     solar_spectrum_file: str = '/Users/ryan/Research/RT_models/RT_thermal_model/Optical_props/solar_integrated_32.txt'  #integrates solar spectrum. Must have same spectral sampling as scattering matrix. 

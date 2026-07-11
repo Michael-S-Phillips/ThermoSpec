@@ -5,6 +5,7 @@ from grid import LayerGrid
 from rte_hapke import RadiativeTransfer
 from rte_disort import DisortRTESolver
 from scipy.linalg import solve_banded
+from stencils import fd1d_heat_implicit_diagonal_nonuniform_kieffer
 import scipy.optimize
 import scipy.integrate
 from scipy.optimize import nnls
@@ -151,14 +152,14 @@ class Simulator:
 		elif mode == 'hybrid':
 			# Hybrid setup: multi-wave thermal + broadband visible
 			self.rte_disort = DisortRTESolver(self.cfg, self.grid,
-										   solver_mode='hybrid', 
-										   spectral_component='thermal_only')
+										   solver_mode='hybrid',
+										   spectral_component='thermal_only', planck=True)
 			self.rte_disort_vis = DisortRTESolver(self.cfg, self.grid,
 											   solver_mode='hybrid',
-											   spectral_component='visible_only')
+											   spectral_component='visible_only', planck=False)
 		else:
 			raise ValueError(f"Unknown thermal_evolution_mode: {mode}")
-		
+
 		print(f"Thermal evolution mode: {mode}")
 
 	def _setup_crater_thermal_evolution_solvers(self):
@@ -187,15 +188,15 @@ class Simulator:
 			# Hybrid setup for crater: multi-wave thermal + broadband visible
 			self.rte_disort_crater = DisortRTESolver(self.cfg, self.grid,
 												  n_cols=n_facets,
-												  solver_mode='hybrid', 
-												  spectral_component='thermal_only')
+												  solver_mode='hybrid',
+												  spectral_component='thermal_only', planck=True)
 			self.rte_disort_crater_vis = DisortRTESolver(self.cfg, self.grid,
 													  n_cols=n_facets,
 													  solver_mode='hybrid',
-													  spectral_component='visible_only')
+													  spectral_component='visible_only', planck=False)
 		else:
 			raise ValueError(f"Unknown thermal_evolution_mode: {mode}")
-		
+
 		print(f"Crater thermal evolution mode: {mode}")
 
 	
@@ -460,6 +461,72 @@ class Simulator:
 		U_new = solve_banded((1, 1), self.grid.diag, b)
 		return U_new
 		# Apply boundary conditions
+
+	def _fd1d_heat_implicit_diag_batch(self, T_mat, source_mat=0):
+		"""Batched implicit heat solve for crater facets sharing one matrix.
+		T_mat/source_mat: [depth, n_facets]. Uses self.grid.diag for all columns.
+		"""
+		if np.isscalar(source_mat):
+			source_mat = np.zeros_like(T_mat) + source_mat
+		b = T_mat + self.grid.dt * source_mat
+		# Two-layer adjustment (rare for crater); apply vectorized if needed
+		if (not self.cfg.single_layer) and self.cfg.use_RTE:
+			i = self.grid.nlay_dust
+			b[i+1, :] -= self.grid.dt * source_mat[i+1, :]
+			dz_rho_cp_ip1 = (self.grid.l_thick[i+1] * self.grid.dens[i+1] * self.grid.heat[i+1]/self.cfg.Et)
+			b[i+1, :] += self.grid.dt * source_mat[i+1, :] / dz_rho_cp_ip1
+		U_new = solve_banded((1, 1), self.grid.diag, b)
+		return U_new
+
+	def _build_crater_diag_for_T(self, T_col):
+		"""Build facet-specific banded diag for crater when temp-dependent physics are enabled.
+		Returns ab diag of shape [3, depth].
+		"""
+		cfg = self.cfg
+		g = self.grid
+		# Heat capacity
+		if cfg.temp_dependent_cp:
+			c0, c1, c2, c3, c4 = cfg.cp_coeffs
+			heat = c0 + c1*T_col + c2*T_col**2 + c3*T_col**3 + c4*T_col**4
+		else:
+			heat = g.heat.copy()
+		# Conductivity (thermal diffusion units)
+		if cfg.temp_dependent_k:
+			if hasattr(g, 'k_depth') and g.k_depth is not None:
+				k_base = g.k_depth.copy()
+			else:
+				k_base = np.full_like(T_col, cfg.k_dust)
+			cond = k_base * (1.0 + cfg.k_temp_coeff * T_col**3) * cfg.Et**2
+		else:
+			cond = g.cond.copy()
+		# Coefficients
+		lthick = g.l_thick
+		dens = g.dens
+		dt = g.dt
+		A1 = (
+			2*dt*cond[1:-1]
+			/ (dens[1:-1]*heat[1:-1] * lthick[1:-1]**2
+			   * (1 + (lthick[0:-2]*cond[1:-1])/(lthick[1:-1]*cond[0:-2])))
+		)
+		A3 = (
+			(1 + (lthick[0:-2]*cond[1:-1])/(lthick[1:-1]*cond[0:-2]))
+			/ (1 + (lthick[2:]*cond[1:-1])/(lthick[1:-1]*cond[2:]))
+		)
+		A2 = -1.0 * (1.0 + A3)
+		ab = fd1d_heat_implicit_diagonal_nonuniform_kieffer(len(g.x), A1, A2, A3)
+		return ab
+
+	def _fd1d_heat_implicit_diag_perfacet(self, T_mat, source_mat):
+		"""Implicit solve per facet with facet-specific temp-dependent matrices.
+		T_mat/source_mat: [depth, n_facets]
+		"""
+		nf = T_mat.shape[1]
+		Tout = np.empty_like(T_mat)
+		for i in range(nf):
+			b = T_mat[:, i] + self.grid.dt * source_mat[:, i]
+			ab = self._build_crater_diag_for_T(T_mat[:, i])
+			Tout[:, i] = solve_banded((1, 1), ab, b)
+		return Tout
 	
 	def _calculate_absorbed_solar_energy(self, dt: float) -> float:
 		"""
@@ -779,7 +846,15 @@ class Simulator:
 						self.T_surf = (fl_up/self.cfg.sigma)**0.25
 					elif(self.cfg.RTE_solver == 'disort'):
 						source_term,self.flux_up_therm = self.rte_disort.disort_run(self.T,self.mu,self.F)
-						self.T_surf = (self.flux_up_therm[0]/self.cfg.sigma)**0.25 
+						if self.rte_disort.is_multi_wave:
+							#flux_up_therm has shape [nwave, ncol] for multi-wave/hybrid thermal
+							#solvers - sum over wavelength to get the bolometric upward flux
+							#before inverting to an effective brightness temperature. Using
+							#flux_up_therm[0] here (as in the non-multi-wave branch below) would
+							#pick out only the first wavelength band's flux.
+							self.T_surf = (np.sum(self.flux_up_therm[:,0])/self.cfg.sigma)**0.25
+						else:
+							self.T_surf = (self.flux_up_therm[0]/self.cfg.sigma)**0.25
 						if self.cfg.thermal_evolution_mode in ['two_wave', 'hybrid'] and self.F > 0.001:
 							# Two-wave and hybrid modes: run separate visible solver
 							source_term_vis,self.flux_up_vis = self.rte_disort_vis.disort_run(self.T,self.mu,self.F)
@@ -899,11 +974,19 @@ class Simulator:
 								source_term_vis = np.zeros_like(source_term)
 						else:
 							raise ValueError(f"Unknown thermal_evolution_mode: {self.cfg.thermal_evolution_mode}")
-						for i in np.arange(len(self.T_surf_crater)):
-							self.T_crater[:,i] = self._fd1d_heat_implicit_diag(self.T_crater[:,i],source_term[i]+source_term_vis[i])
+						# Advance crater columns: batched if sharing matrix; per-facet if crater temp-dependent is enabled
+						src = source_term + source_term_vis
+						# Ensure [depth, n_facets] orientation
+						if src.ndim == 2 and src.shape[0] == self.n_facets and src.shape[1] == self.grid.x_num:
+							src = src.swapaxes(0, 1)
+						if (not self.cfg.crater_temp_dependent_properties) and (not self.cfg.temperature_dependent_properties):
+							self.T_crater = self._fd1d_heat_implicit_diag_batch(self.T_crater, src)
+						else:
+							self.T_crater = self._fd1d_heat_implicit_diag_perfacet(self.T_crater, src)
 					else:
-						for i in np.arange(len(self.T_surf_crater)):
-							if self.cfg.use_RTE:
+						if self.cfg.use_RTE:
+							# Hapke path: keep per-facet loop (different matrices per facet)
+							for i in np.arange(len(self.T_surf_crater)):
 								if(self.cfg.RTE_solver == 'hapke'):
 									# Use proper solar incidence angle for this facet
 									source_term, self.phi_vis_prev_crater[:,i], self.phi_therm_prev_crater[:,i] = self.rte_hapke.compute_source(
@@ -911,8 +994,15 @@ class Simulator:
 										self.mu_solar_facets[i], self.illuminated[i], Q_therm=Q_selfheat[i], Q_vis=Q_scat[i])
 									#Calculate flux up from equation that phi = (up+down)/2, where down is the Q_therm from above. Multiply by pi as usual to convert from Hapke convention to flux in W/m2
 									self.flux_therm_crater[i] = (self.phi_therm_prev_crater[0,i]*2 - Q_selfheat[i])*np.pi
-							# Advance heat equation with solve_banded (must be looped)
-							self.T_crater[:,i] = self._fd1d_heat_implicit_diag(self.T_crater[:,i],source_term+source_term_vis)
+								# Advance heat equation with per-facet solve. Not currently optimized with the batch processing as with disort. 
+								self.T_crater[:,i] = self._fd1d_heat_implicit_diag(self.T_crater[:,i], source_term+source_term_vis)
+						else:
+							# Non-RTE crater: optimize final tridiagonal step in batch (zero interior source)
+							if (not self.cfg.crater_temp_dependent_properties) and (not self.cfg.temperature_dependent_properties):
+								self.T_crater = self._fd1d_heat_implicit_diag_batch(self.T_crater, 0)
+							else:
+								zero_src = np.zeros_like(self.T_crater)
+								self.T_crater = self._fd1d_heat_implicit_diag_perfacet(self.T_crater, zero_src)
 					#Apply boundary conditions, which is vectorized and doesn't require a loop. 
 					self.T_crater, self.T_surf_crater = self._bc(self.T_crater, self.T_surf_crater,Q_dir+Q_scat*(1-self.crater_albedo)*np.pi+Q_selfheat*self.crater_emissivity*np.pi)
 					if self.cfg.use_RTE:
@@ -1012,6 +1102,7 @@ class Simulator:
 	# ========================================
 	# These properties provide backward compatibility by automatically computing radiances
 	# when accessed, using the new radiance_processor module
+	#Andy's note: this is some AI shit....
 	
 	@property
 	def radiance_out(self):
