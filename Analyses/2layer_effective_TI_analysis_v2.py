@@ -76,13 +76,16 @@ DEFAULT_OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'o
 
 # -----------------------------------------------------------------------------
 # Gundlach & Blum contact-conductivity model for phonon-only k_dust, as a
-# function of grain diameter and porosity. Poisson's ratio / Young's modulus
-# are not yet finalized (see plan "Open dependencies") - callers must pass
-# them explicitly; ks=1.0, X=0.5 are provisional defaults per the user.
+# function of grain diameter and porosity. ks=1.0, X=0.5 are provisional
+# defaults per the user (still pending final values); poissons/youngs
+# callers must pass explicitly - GB_POISSONS_DEFAULT/GB_YOUNGS_DEFAULT below
+# are the user-supplied real values for the dust material.
 # -----------------------------------------------------------------------------
 _GB_F1 = 5.18e-2
 _GB_F2 = 5.26
 _GB_SURFENERGY_SIO = 0.020  # J/m^2
+GB_POISSONS_DEFAULT = 0.269    # dimensionless, user-supplied
+GB_YOUNGS_DEFAULT = 5.625e9    # Pa, user-supplied
 
 
 def gundlach_blum_k_dust(sphere_diam, porosity, poissons, youngs, ks=1.0, X=0.5):
@@ -198,12 +201,71 @@ def _refine_day_peak(t_out, T, day_mask):
 
 
 # -----------------------------------------------------------------------------
+# Timestep convergence check: repeatedly double tsteps_day (starting from
+# whatever the caller's base config already has, e.g. 5000 from
+# _make_common_numerics) until the fit-relevant output stops changing by
+# more than tol_K, fully independent per run (no cross-run reuse or
+# interpolation - deliberately simple per the user's preference, to avoid
+# baking in untested assumptions about which parameters a converged
+# resolution transfers across).
+#
+# This directly fixes a real bug found via diagnosis: the RTE branch's
+# near-surface grid layer (dust_rte_max_lthick, in tau units) becomes very
+# thin in physical terms once Et is large (real Mie-calibrated Et is ~18x
+# the placeholder value used in prior validation), and the fixed
+# tsteps_day=5000 inherited from that prior validation silently
+# under-resolves it - confirmed empirically (5000 steps/day gave a 67 K
+# diurnal amplitude for a materially "infinite dust" case; 100000 steps/day
+# gave 157.5 K, still not converged). auto_dt was considered and rejected -
+# the user's own experience is that it overshoots unreliably and cannot be
+# trusted as a stand-in for actual verified convergence.
+#
+# Capped (max_doublings) to avoid unbounded runaway compute for pathological
+# cases; a capped-out run is flagged as non-converged in its output, never
+# silently trusted.
+# -----------------------------------------------------------------------------
+
+def run_with_convergence_check(build_and_run_fn, extract_fn, base_tsteps_day=5000,
+                                tol_K=0.1, max_doublings=8, verbose=True, tag=''):
+    """build_and_run_fn(tsteps_day) -> completed Simulator.
+    extract_fn(sim) -> 1D ndarray, the fit-relevant series to check for
+    convergence (e.g. sim.T_surf_out or a Tb_bol array).
+
+    Returns a dict: sim, converged (bool), n_doublings, tsteps_day,
+    max_abs_diff (K, from the final comparison)."""
+    label = f' {tag}' if tag else ''
+    tsteps_day = base_tsteps_day
+    sim_prev = build_and_run_fn(tsteps_day)
+    series_prev = extract_fn(sim_prev)
+    max_abs_diff = None
+    for n in range(1, max_doublings + 1):
+        tsteps_day *= 2
+        sim_cur = build_and_run_fn(tsteps_day)
+        series_cur = extract_fn(sim_cur)
+        max_abs_diff = float(np.max(np.abs(series_cur - series_prev)))
+        if verbose:
+            print(f"  [convergence{label}] tsteps_day={tsteps_day}: "
+                  f"max_abs_diff={max_abs_diff:.4f} K")
+        if max_abs_diff < tol_K:
+            return {'sim': sim_cur, 'converged': True, 'n_doublings': n,
+                    'tsteps_day': tsteps_day, 'max_abs_diff': max_abs_diff}
+        sim_prev, series_prev = sim_cur, series_cur
+    print(f"  [convergence{label}] WARNING: did not converge within "
+          f"{max_doublings} doublings (final tsteps_day={tsteps_day}, "
+          f"max_abs_diff={max_abs_diff:.4f} K >= {tol_K} K) - result may still "
+          f"contain significant numerical error.")
+    return {'sim': sim_cur, 'converged': False, 'n_doublings': max_doublings,
+            'tsteps_day': tsteps_day, 'max_abs_diff': max_abs_diff}
+
+
+# -----------------------------------------------------------------------------
 # 1. One-layer non-RTE LUT
 # -----------------------------------------------------------------------------
 
 def build_single_layer_lut(k_dust_values=None, timing=None, rho_dust_ref=None,
                             cp_dust_ref=None, albedo=NONRTE_ALBEDO_DEFAULT,
-                            em=NONRTE_EM_DEFAULT, verbose=True):
+                            em=NONRTE_EM_DEFAULT, enable_convergence_check=False,
+                            convergence_tol_K=0.1, max_doublings=8, verbose=True):
     """One-layer, non-RTE homogeneous lookup table swept over k_dust - the
     common reference both two-layer branches are fit against."""
     if k_dust_values is None:
@@ -217,6 +279,7 @@ def build_single_layer_lut(k_dust_values=None, timing=None, rho_dust_ref=None,
     canonical_t_out = None
     canonical_mu_out = None
     T_surf_list = []
+    convergence_list = []
 
     for k in k_dust_values:
         cfg = SimulationConfig()
@@ -235,8 +298,25 @@ def build_single_layer_lut(k_dust_values=None, timing=None, rho_dust_ref=None,
 
         if verbose:
             print(f"[LUT] k_dust={k:.4e} W/m/K")
-        sim = Simulator(cfg)
-        sim.run()
+
+        def _build_and_run(tsteps_day, _cfg=cfg):
+            c = copy.deepcopy(_cfg)
+            c.tsteps_day = tsteps_day
+            c.__post_init__()
+            s = Simulator(c)
+            s.run()
+            return s
+
+        if enable_convergence_check:
+            conv = run_with_convergence_check(
+                _build_and_run, lambda s: s.T_surf_out, base_tsteps_day=cfg.tsteps_day,
+                tol_K=convergence_tol_K, max_doublings=max_doublings, verbose=verbose,
+                tag=f'LUT k={k:.2e}')
+            sim = conv['sim']
+            convergence_list.append({ck: cv for ck, cv in conv.items() if ck != 'sim'})
+        else:
+            sim = _build_and_run(cfg.tsteps_day)
+            convergence_list.append(None)
 
         if canonical_t_out is None:
             canonical_t_out = sim.t_out.copy()
@@ -273,7 +353,7 @@ def build_single_layer_lut(k_dust_values=None, timing=None, rho_dust_ref=None,
         'max_T': max_T, 'min_T': min_T, 'max_time': max_time,
         't_noon': t_noon, 'period': period, 'lag_deg': lag_deg,
         'rho_dust_ref': rho_dust_ref, 'cp_dust_ref': cp_dust_ref,
-        'albedo': albedo, 'em': em,
+        'albedo': albedo, 'em': em, 'convergence': convergence_list,
     }
 
 
@@ -284,6 +364,8 @@ def build_single_layer_lut(k_dust_values=None, timing=None, rho_dust_ref=None,
 def build_biele_two_layer_sweep(dust_thickness_values=None, timing=None,
                                  rock=None, albedo=NONRTE_ALBEDO_DEFAULT,
                                  em=NONRTE_EM_DEFAULT, canonical_t_out=None,
+                                 enable_convergence_check=False,
+                                 convergence_tol_K=0.1, max_doublings=8,
                                  verbose=True):
     """Literal reproduction of Biele et al. 2019's two-layer opaque-dust
     conduction model: fixed dust material properties (their Table 1 values),
@@ -316,8 +398,25 @@ def build_biele_two_layer_sweep(dust_thickness_values=None, timing=None,
 
         if verbose:
             print(f"[Biele branch] dust_thickness={thickness:.3e} m")
-        sim = Simulator(cfg)
-        sim.run()
+
+        def _build_and_run(tsteps_day, _cfg=cfg):
+            c = copy.deepcopy(_cfg)
+            c.tsteps_day = tsteps_day
+            c.__post_init__()
+            s = Simulator(c)
+            s.run()
+            return s
+
+        if enable_convergence_check:
+            conv = run_with_convergence_check(
+                _build_and_run, lambda s: s.T_surf_out, base_tsteps_day=cfg.tsteps_day,
+                tol_K=convergence_tol_K, max_doublings=max_doublings, verbose=verbose,
+                tag=f'Biele d={thickness:.2e}')
+            sim = conv['sim']
+            convergence = {ck: cv for ck, cv in conv.items() if ck != 'sim'}
+        else:
+            sim = _build_and_run(cfg.tsteps_day)
+            convergence = None
 
         if canonical_t_out is not None:
             assert np.allclose(sim.t_out, canonical_t_out), (
@@ -326,8 +425,8 @@ def build_biele_two_layer_sweep(dust_thickness_values=None, timing=None,
             )
 
         results[float(thickness)] = {
-            'config': cfg, 't_out': sim.t_out.copy(), 'mu_out': sim.mu_out.copy(),
-            'T_surf': sim.T_surf_out.copy(),
+            'config': sim.cfg, 't_out': sim.t_out.copy(), 'mu_out': sim.mu_out.copy(),
+            'T_surf': sim.T_surf_out.copy(), 'convergence': convergence,
         }
     return results
 
@@ -342,6 +441,8 @@ def build_rte_two_layer_sweep(dust_thickness_values=None, grain_diameters=None,
                                target_bond_albedo=NONRTE_ALBEDO_DEFAULT,
                                observer_angle=0.0, compute_tb_max=True,
                                canonical_t_out=None, output_dir=DEFAULT_OUTPUT_DIR,
+                               enable_convergence_check=False,
+                               convergence_tol_K=0.1, max_doublings=8,
                                verbose=True):
     """RTE (hybrid/multi-wave) two-layer sweep over dust thickness x grain
     diameter x porosity. Phonon-only k_dust from gundlach_blum_k_dust;
@@ -434,8 +535,29 @@ def build_rte_two_layer_sweep(dust_thickness_values=None, grain_diameters=None,
                 cfg.__post_init__()
                 if verbose:
                     print(f"[RTE branch {combo_tag}] dust_thickness={thickness:.3e} m")
-                sim = Simulator(cfg)
-                sim.run()
+
+                def _build_and_run(tsteps_day, _cfg=cfg):
+                    c = copy.deepcopy(_cfg)
+                    c.tsteps_day = tsteps_day
+                    c.__post_init__()
+                    s = Simulator(c)
+                    s.run()
+                    return s
+
+                def _extract_tb_bol(s, _angle=observer_angle):
+                    _, tb = bolometric_brightness_temperature_series(s, observer_angle=_angle)
+                    return tb
+
+                if enable_convergence_check:
+                    conv = run_with_convergence_check(
+                        _build_and_run, _extract_tb_bol, base_tsteps_day=cfg.tsteps_day,
+                        tol_K=convergence_tol_K, max_doublings=max_doublings, verbose=verbose,
+                        tag=f'RTE {combo_tag} d={thickness:.2e}')
+                    sim = conv['sim']
+                    convergence = {ck: cv for ck, cv in conv.items() if ck != 'sim'}
+                else:
+                    sim = _build_and_run(cfg.tsteps_day)
+                    convergence = None
 
                 if canonical_t_out is not None:
                     assert np.allclose(sim.t_out, canonical_t_out), (
@@ -449,8 +571,9 @@ def build_rte_two_layer_sweep(dust_thickness_values=None, grain_diameters=None,
                     _, Tb_max = max_brightness_temperature_series(sim, observer_angle=observer_angle)
 
                 combo_results[float(thickness)] = {
-                    'config': cfg, 't_out': sim.t_out.copy(), 'mu_out': sim.mu_out.copy(),
+                    'config': sim.cfg, 't_out': sim.t_out.copy(), 'mu_out': sim.mu_out.copy(),
                     'T_surf': sim.T_surf_out.copy(), 'Tb_bol': Tb_bol, 'Tb_max': Tb_max,
+                    'convergence': convergence,
                 }
 
             results[(grain_diam, porosity)] = {
@@ -572,6 +695,17 @@ def _h5_write_fits(group, fits):
             g.attrs[key] = val
 
 
+def _h5_write_convergence(group, convergence):
+    """convergence: None (check disabled) or the dict from
+    run_with_convergence_check (minus 'sim')."""
+    if convergence is None:
+        group.attrs['enabled'] = False
+        return
+    group.attrs['enabled'] = True
+    for key, val in convergence.items():
+        group.attrs[key] = val
+
+
 def save_results(output_path, lut, biele_results, rte_results, meta=None):
     """Structured HDF5 output: /meta, /lut, /two_layer_biele, /two_layer_rte,
     /summary. Requires attach_fits() to have already been called."""
@@ -602,6 +736,9 @@ def save_results(output_path, lut, biele_results, rte_results, meta=None):
         g_lut.attrs['em'] = lut['em']
         g_lut.attrs['t_noon'] = lut['t_noon']
         g_lut.attrs['period'] = lut['period']
+        g_lut_conv = g_lut.create_group('convergence')
+        for i, conv in enumerate(lut['convergence']):
+            _h5_write_convergence(g_lut_conv.create_group(f'k_{i:03d}'), conv)
 
         g_biele = f.create_group('two_layer_biele')
         for i, thickness in enumerate(sorted(biele_results.keys())):
@@ -611,6 +748,7 @@ def save_results(output_path, lut, biele_results, rte_results, meta=None):
             _h5_write_config(g, res['config'])
             g.create_dataset('T_surf', data=res['T_surf'])
             _h5_write_fits(g.create_group('fits'), res['fits'])
+            _h5_write_convergence(g.create_group('convergence'), res['convergence'])
 
         g_rte = f.create_group('two_layer_rte')
         for (grain, porosity), combo in rte_results.items():
@@ -635,6 +773,7 @@ def save_results(output_path, lut, biele_results, rte_results, meta=None):
                 if res['Tb_max'] is not None:
                     g.create_dataset('Tb_max', data=res['Tb_max'])
                 _h5_write_fits(g.create_group('fits'), res['fits'])
+                _h5_write_convergence(g.create_group('convergence'), res['convergence'])
 
         g_sum = f.create_group('summary')
         biele_thick = np.array(sorted(biele_results.keys()))
@@ -661,9 +800,13 @@ def _plot_thickness_grid(pdf, items, get_curve_key, title_prefix):
         best_k = res['fits']['full']['best_k_dust']
         lut_curve = res['_lut']['lut_k_interp'](np.log10(best_k))
         model_curve = res[get_curve_key]
+        amplitude = float(np.max(model_curve) - np.min(model_curve))
+        mse = res['fits']['full']['mse']
+        rel_rms_pct = 100.0 * np.sqrt(mse) / amplitude if amplitude > 0 else float('nan')
         ax.plot(res['_lut']['t_out'] / 3600.0, model_curve, 'b-', label=title_prefix)
         ax.plot(res['_lut']['t_out'] / 3600.0, lut_curve, 'r--', label=f'Single-layer fit (k={best_k:.2e})')
-        ax.set_title(f'd={thickness:.2e} m\nTI={res["fits"]["full"]["best_TI"]:.1f}', fontsize=9)
+        ax.set_title(f'd={thickness:.2e} m, TI={res["fits"]["full"]["best_TI"]:.1f}\n'
+                     f'full-curve rel. RMS={rel_rms_pct:.1f}%', fontsize=8)
         if i % 12 == 0:
             ax.legend(fontsize=7)
         if (i + 1) % 12 == 0 or i == len(items) - 1:
@@ -674,24 +817,72 @@ def _plot_thickness_grid(pdf, items, get_curve_key, title_prefix):
                 fig = plt.figure(figsize=(15, 10))
 
 
+def _relative_rms_pct(thicknesses, curve_key, results_by_thickness):
+    """sqrt(MSE)/diurnal-amplitude, as a percentage - large values mean the
+    single-parameter homogeneous fit is a poor match to the curve shape,
+    not just a surprising TI number."""
+    out = []
+    for t in thicknesses:
+        res = results_by_thickness[t]
+        curve = res[curve_key]
+        amp = float(np.max(curve) - np.min(curve))
+        mse = res['fits']['full']['mse']
+        out.append(100.0 * np.sqrt(mse) / amp if amp > 0 else np.nan)
+    return np.array(out)
+
+
 def plot_summary(output_pdf, lut, biele_results, rte_results):
-    """Diagnostic PDF: headline TI-vs-thickness summary, then per-thickness
-    two-layer-vs-best-fit overlays for each branch. Requires attach_fits()
-    to have already been called."""
+    """Diagnostic PDF: headline TI-vs-thickness summary (with true
+    pure-material TI reference lines), a companion fit-quality (relative
+    RMS) panel, then per-thickness two-layer-vs-best-fit overlays (with
+    relative RMS annotated) for each branch. Requires attach_fits() to have
+    already been called."""
+    rock_TI = float(np.sqrt(ROCK_DEFAULTS['k_rock'] * ROCK_DEFAULTS['rho_rock'] * ROCK_DEFAULTS['cp_rock']))
+    biele_dust_TI = float(np.sqrt(BIELE_K_DUST * BIELE_RHO_DUST * BIELE_CP_DUST))
+    colors = plt.cm.tab10(np.linspace(0, 1, max(len(rte_results), 1)))
+
     with PdfPages(output_pdf) as pdf:
+        # --- Headline TI-vs-thickness summary, with true-TI reference lines ---
         fig, ax = plt.subplots(figsize=(8, 6))
         biele_thick = np.array(sorted(biele_results.keys()))
         biele_TI = np.array([biele_results[t]['fits']['full']['best_TI'] for t in biele_thick])
-        ax.semilogx(biele_thick, biele_TI, 'o-', label='Biele-style (non-RTE)')
-        for (grain, porosity), combo in rte_results.items():
+        ax.semilogx(biele_thick, biele_TI, 'o-', label='Biele-style (non-RTE)', color='tab:blue')
+        ax.axhline(rock_TI, color='gray', linestyle=':', linewidth=1,
+                    label=f'Rock TI ({rock_TI:.0f})')
+        ax.axhline(biele_dust_TI, color='tab:blue', linestyle=':', linewidth=1,
+                    label=f'Biele pure-dust TI ({biele_dust_TI:.1f})')
+        for idx, ((grain, porosity), combo) in enumerate(rte_results.items()):
             rte_thick = np.array(sorted(combo['thicknesses'].keys()))
             rte_TI = np.array([combo['thicknesses'][t]['fits']['full']['best_TI'] for t in rte_thick])
-            ax.semilogx(rte_thick, rte_TI, 's--',
-                        label=f'RTE (grain={grain * 1e6:.1f}um, poro={porosity:.2f})')
+            label = f'RTE (grain={grain * 1e6:.1f}um, poro={porosity:.2f})'
+            color = colors[idx]
+            ax.semilogx(rte_thick, rte_TI, 's--', label=label, color=color)
+            rte_dust_TI = float(np.sqrt(combo['phonon_k_dust'] * combo['rho_dust'] * CP_DUST_DEFAULT))
+            ax.axhline(rte_dust_TI, color=color, linestyle=':', linewidth=1,
+                        label=f'{label} pure-dust TI ({rte_dust_TI:.1f})')
         ax.set_xlabel('Dust thickness (m)')
         ax.set_ylabel(r'Effective single-layer TI (J m$^{-2}$ K$^{-1}$ s$^{-1/2}$)')
-        ax.set_title('Full-curve chi-squared fit')
-        ax.legend(fontsize=8)
+        ax.set_title('Full-curve chi-squared fit (dotted: true pure-material TI)')
+        ax.legend(fontsize=6, loc='best')
+        ax.grid(True, which='both', alpha=0.3)
+        pdf.savefig(fig)
+        plt.close(fig)
+
+        # --- Fit-quality (relative RMS) companion plot ---
+        fig, ax = plt.subplots(figsize=(8, 6))
+        biele_rel_rms = _relative_rms_pct(biele_thick, 'T_surf', biele_results)
+        ax.semilogx(biele_thick, biele_rel_rms, 'o-', label='Biele-style (non-RTE)', color='tab:blue')
+        for idx, ((grain, porosity), combo) in enumerate(rte_results.items()):
+            rte_thick = np.array(sorted(combo['thicknesses'].keys()))
+            rte_rel_rms = _relative_rms_pct(rte_thick, 'Tb_bol', combo['thicknesses'])
+            label = f'RTE (grain={grain * 1e6:.1f}um, poro={porosity:.2f})'
+            ax.semilogx(rte_thick, rte_rel_rms, 's--', label=label, color=colors[idx])
+        ax.axhline(10.0, color='red', linestyle=':', linewidth=1, label='10% (caution threshold)')
+        ax.set_xlabel('Dust thickness (m)')
+        ax.set_ylabel('Full-curve fit relative RMS residual (%)')
+        ax.set_title('Fit quality - large values mean the single-parameter homogeneous\n'
+                      'model is a poor match to the curve shape, not just a surprising TI')
+        ax.legend(fontsize=7, loc='best')
         ax.grid(True, which='both', alpha=0.3)
         pdf.savefig(fig)
         plt.close(fig)
@@ -723,26 +914,29 @@ def run_full_analysis(dust_thickness_values=None, k_dust_lut_values=None,
                        poissons=None, youngs=None, ks=1.0, X=0.5,
                        target_bond_albedo=NONRTE_ALBEDO_DEFAULT, observer_angle=0.0,
                        compute_tb_max=True, output_dir=DEFAULT_OUTPUT_DIR,
-                       run_tag=None):
+                       enable_convergence_check=False, convergence_tol_K=0.1,
+                       max_doublings=8, run_tag=None):
     os.makedirs(output_dir, exist_ok=True)
     if run_tag is None:
         run_tag = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
 
     timing = TIMING_DEFAULTS
+    conv_kwargs = dict(enable_convergence_check=enable_convergence_check,
+                        convergence_tol_K=convergence_tol_K, max_doublings=max_doublings)
 
     print("=== Building one-layer non-RTE LUT ===")
-    lut = build_single_layer_lut(k_dust_lut_values, timing)
+    lut = build_single_layer_lut(k_dust_lut_values, timing, **conv_kwargs)
 
     print("=== Building Biele-style two-layer (non-RTE) sweep ===")
     biele_results = build_biele_two_layer_sweep(
-        dust_thickness_values, timing, canonical_t_out=lut['t_out'])
+        dust_thickness_values, timing, canonical_t_out=lut['t_out'], **conv_kwargs)
 
     print("=== Building RTE (hybrid) two-layer sweep ===")
     rte_results = build_rte_two_layer_sweep(
         dust_thickness_values, grain_diameters, porosities, poissons, youngs,
         ks=ks, X=X, timing=timing, target_bond_albedo=target_bond_albedo,
         observer_angle=observer_angle, compute_tb_max=compute_tb_max,
-        canonical_t_out=lut['t_out'], output_dir=output_dir)
+        canonical_t_out=lut['t_out'], output_dir=output_dir, **conv_kwargs)
 
     print("=== Fitting all six apparent-TI methods ===")
     attach_fits(lut, biele_results, rte_results)
@@ -762,27 +956,35 @@ def run_full_analysis(dust_thickness_values=None, k_dust_lut_values=None,
 
 
 if __name__ == "__main__":
-    # Phase-A smoke test: reduced sweep (3 thicknesses, both available grain
-    # sizes, single porosity), to validate the pipeline end-to-end before
-    # committing to a full run. poissons/youngs below are PLACEHOLDER values
-    # only (typical crystalline-silicate literature figures) - replace with
-    # the user-supplied final values before any production/publication run
-    # (see plan "Open dependencies").
-    # Includes 5mm and 2cm - the previously-catastrophic (13,071-layer)
-    # thick-dust cases - to confirm the grid.py geometric-spacing fix makes
-    # the "fully thermally opaque" saturation regime tractable again.
-    smoke_thicknesses = np.array([10.0e-6, 200.0e-6, 0.005, 0.02])
-    PLACEHOLDER_POISSONS = 0.17     # dimensionless - PLACEHOLDER, not yet finalized
-    PLACEHOLDER_YOUNGS = 5.4e10     # Pa - PLACEHOLDER, not yet finalized
+    # Phase-A smoke test: reduced sweep (2 thicknesses spanning thin<->thick,
+    # one grain size), to validate the pipeline end-to-end. poissons/youngs
+    # are the user-supplied real values (GB_POISSONS_DEFAULT/GB_YOUNGS_DEFAULT);
+    # ks/X remain provisional (1.0/0.5) pending final values.
+    #
+    # enable_convergence_check=True is load-bearing, not optional, for the
+    # RTE branch: the real Mie-calibrated Et (~130714/m) makes the RTE
+    # branch's near-surface grid layer (dust_rte_max_lthick, tau units) only
+    # ~0.4-0.8 microns physically, and the fixed tsteps_day inherited from
+    # earlier (smaller-Et) validation silently under-resolves it - confirmed
+    # via diagnosis (5000 steps/day gave a 67 K diurnal amplitude for an
+    # "infinite dust" case that should show ~150-200+ K; still climbing at
+    # 100000 steps/day). Only 2 thicknesses here because full RTE-branch
+    # convergence checking is expensive (each doubling re-runs the full
+    # diurnal cycle) - this is a real, accepted compute-vs-correctness
+    # tradeoff, not a shortcut (see plan).
+    smoke_thicknesses = np.array([10.0e-6, 0.02])
 
     lut, biele_results, rte_results = run_full_analysis(
         dust_thickness_values=smoke_thicknesses,
         k_dust_lut_values=K_DUST_LUT_DEFAULT,
         grain_diameters=[1e-6],
         porosities=[1.0 - 0.37],
-        poissons=PLACEHOLDER_POISSONS,
-        youngs=PLACEHOLDER_YOUNGS,
-        run_tag='phaseA_smoketest',
+        poissons=GB_POISSONS_DEFAULT,
+        youngs=GB_YOUNGS_DEFAULT,
+        enable_convergence_check=True,
+        convergence_tol_K=0.1,
+        max_doublings=8,
+        run_tag='phaseA_smoketest_convcheck',
     )
 
     # --- Full production sweep (uncomment once Poisson's ratio / Young's

@@ -163,7 +163,7 @@ class LayerGrid:
             # keep adding nodes until the next would go past L
             while x[-1] + s < L:
                 l_thick.append(s)
-                x.append(x[-1] + 0.5*l_thick[-1] + 0.5*l_thick[-1])
+                x.append(x[-1] + 0.5*l_thick[-2] + 0.5*l_thick[-1])
                 s *= cfg.spacing_factor  # increase spacing by factor
             
             last = L + (L - x[-1])
