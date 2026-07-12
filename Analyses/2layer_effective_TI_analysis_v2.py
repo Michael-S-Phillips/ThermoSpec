@@ -65,6 +65,7 @@ from hybrid_calibration import (
     write_thermal_wn_bounds_file,
     bolometric_brightness_temperature_series,
     max_brightness_temperature_series,
+    downsample_mie_file,
 )
 from spectral_calibration import solve_ssalb_vis
 
@@ -443,6 +444,7 @@ def build_rte_two_layer_sweep(dust_thickness_values=None, grain_diameters=None,
                                canonical_t_out=None, output_dir=DEFAULT_OUTPUT_DIR,
                                enable_convergence_check=False,
                                convergence_tol_K=0.1, max_doublings=8,
+                               n_bands=None, dust_rte_max_lthick=None,
                                verbose=True):
     """RTE (hybrid/multi-wave) two-layer sweep over dust thickness x grain
     diameter x porosity. Phonon-only k_dust from gundlach_blum_k_dust;
@@ -450,7 +452,23 @@ def build_rte_two_layer_sweep(dust_thickness_values=None, grain_diameters=None,
     file; ssalb_vis calibrated once per combo against the thickest ("most
     opaque") dust thickness in the sweep, since thin dust has little
     leverage over bond albedo (substrate-reflectivity-dominated). Fit
-    target: Tb_bol (directional bolometric brightness temperature)."""
+    target: Tb_bol (directional bolometric brightness temperature).
+
+    n_bands : int, optional
+        If set, downsample the Mie file to this many coarse bands
+        (unweighted average, see hybrid_calibration.downsample_mie_file)
+        before use - a real speed/accuracy tradeoff, not free; full spectral
+        resolution (None) is the correctness-first default. A smarter
+        (property-change-weighted, not uniform) downsampling is a natural
+        follow-up if this proves too coarse.
+    dust_rte_max_lthick : float, optional
+        Overrides SimulationConfig's default (0.05, tau units) for the RTE
+        branch's near-surface grid-layer cap. Larger values coarsen the
+        near-surface grid (fewer layers -> larger stable timestep) at some
+        accuracy cost very near the surface; kept in tau (extinction-depth)
+        units deliberately, not physical length, per prior validation of
+        thin-coating scenarios needing fine resolution in that unit system.
+    """
     if dust_thickness_values is None:
         dust_thickness_values = DUST_THICKNESS_DEFAULT
     if grain_diameters is None:
@@ -481,6 +499,16 @@ def build_rte_two_layer_sweep(dust_thickness_values=None, grain_diameters=None,
         mie_info = GRAIN_MIE_FILES[grain_diam]
         mie_file = mie_info['mie_file']
         radius = mie_info['radius']
+        wn_bounds_base = WN_BOUNDS_BASE
+
+        if n_bands is not None:
+            ds_tag = f"grain{grain_diam * 1e6:.1f}um_{n_bands}b"
+            ds_mie_path = os.path.join(output_dir, f"mie_downsampled_{ds_tag}.txt")
+            ds_wn_path = os.path.join(output_dir, f"wn_bounds_downsampled_{ds_tag}.txt")
+            if verbose:
+                print(f"[RTE branch] downsampling {mie_file} to {n_bands} bands ...")
+            mie_file, wn_bounds_base = downsample_mie_file(
+                mie_file, WN_BOUNDS_BASE, n_bands, ds_mie_path, ds_wn_path)
 
         for porosity in porosities:
             fill_frac = 1.0 - porosity
@@ -497,6 +525,8 @@ def build_rte_two_layer_sweep(dust_thickness_values=None, grain_diameters=None,
             _make_common_numerics(base_cfg)
             for key, val in rock.items():
                 setattr(base_cfg, key, val)
+            if dust_rte_max_lthick is not None:
+                base_cfg.dust_rte_max_lthick = dust_rte_max_lthick
             base_cfg.R_base = SUBSTRATE_R_BASE
             base_cfg.mie_file = mie_file
             base_cfg.radius = radius
@@ -511,7 +541,7 @@ def build_rte_two_layer_sweep(dust_thickness_values=None, grain_diameters=None,
             set_eta_geometric_optics(base_cfg, fill_frac=fill_frac, radius=radius)
 
             wn_bounds_path = os.path.join(output_dir, f"wn_bounds_thermal_{combo_tag}.txt")
-            write_thermal_wn_bounds_file(WN_BOUNDS_BASE, mie_file, base_cfg.hybrid_wavelength_cutoff, wn_bounds_path)
+            write_thermal_wn_bounds_file(wn_bounds_base, mie_file, base_cfg.hybrid_wavelength_cutoff, wn_bounds_path)
             base_cfg.wn_bounds = wn_bounds_path
             base_cfg.mie_file_out = mie_file
             base_cfg.wn_bounds_out = wn_bounds_path
@@ -915,7 +945,8 @@ def run_full_analysis(dust_thickness_values=None, k_dust_lut_values=None,
                        target_bond_albedo=NONRTE_ALBEDO_DEFAULT, observer_angle=0.0,
                        compute_tb_max=True, output_dir=DEFAULT_OUTPUT_DIR,
                        enable_convergence_check=False, convergence_tol_K=0.1,
-                       max_doublings=8, run_tag=None):
+                       max_doublings=8, n_bands=None, dust_rte_max_lthick=None,
+                       run_tag=None):
     os.makedirs(output_dir, exist_ok=True)
     if run_tag is None:
         run_tag = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -936,7 +967,8 @@ def run_full_analysis(dust_thickness_values=None, k_dust_lut_values=None,
         dust_thickness_values, grain_diameters, porosities, poissons, youngs,
         ks=ks, X=X, timing=timing, target_bond_albedo=target_bond_albedo,
         observer_angle=observer_angle, compute_tb_max=compute_tb_max,
-        canonical_t_out=lut['t_out'], output_dir=output_dir, **conv_kwargs)
+        canonical_t_out=lut['t_out'], output_dir=output_dir,
+        n_bands=n_bands, dust_rte_max_lthick=dust_rte_max_lthick, **conv_kwargs)
 
     print("=== Fitting all six apparent-TI methods ===")
     attach_fits(lut, biele_results, rte_results)
@@ -972,6 +1004,15 @@ if __name__ == "__main__":
     # convergence checking is expensive (each doubling re-runs the full
     # diurnal cycle) - this is a real, accepted compute-vs-correctness
     # tradeoff, not a shortcut (see plan).
+    #
+    # Speed adjustments (per user, after watching the first convergence-
+    # checked run get expensive): convergence_tol_K relaxed 0.1->0.25 K,
+    # dust_rte_max_lthick nudged 0.05->0.075 tau (modest, deliberately kept
+    # in tau units - see build_rte_two_layer_sweep docstring), and the Mie
+    # file downsampled to 20 bands (from the full ~200) via n_bands - an
+    # explicit, real accuracy tradeoff, not free; a smarter
+    # property-change-weighted downsampling (vs. this uniform one) is a
+    # flagged follow-up, not implemented yet.
     smoke_thicknesses = np.array([10.0e-6, 0.02])
 
     lut, biele_results, rte_results = run_full_analysis(
@@ -982,9 +1023,11 @@ if __name__ == "__main__":
         poissons=GB_POISSONS_DEFAULT,
         youngs=GB_YOUNGS_DEFAULT,
         enable_convergence_check=True,
-        convergence_tol_K=0.1,
+        convergence_tol_K=0.25,
         max_doublings=8,
-        run_tag='phaseA_smoketest_convcheck',
+        n_bands=20,
+        dust_rte_max_lthick=0.075,
+        run_tag='phaseA_smoketest_convcheck_v2',
     )
 
     # --- Full production sweep (uncomment once Poisson's ratio / Young's
