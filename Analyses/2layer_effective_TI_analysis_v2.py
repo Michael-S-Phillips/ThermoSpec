@@ -227,10 +227,24 @@ def _refine_day_peak(t_out, T, day_mask):
 # -----------------------------------------------------------------------------
 
 def run_with_convergence_check(build_and_run_fn, extract_fn, base_tsteps_day=5000,
-                                tol_K=0.1, max_doublings=8, verbose=True, tag=''):
+                                tol_K=0.1, max_doublings=8, max_tsteps_day=200000,
+                                verbose=True, tag=''):
     """build_and_run_fn(tsteps_day) -> completed Simulator.
     extract_fn(sim) -> 1D ndarray, the fit-relevant series to check for
     convergence (e.g. sim.T_surf_out or a Tb_bol array).
+
+    max_tsteps_day is a hard memory-safety ceiling, independent of
+    max_doublings: modelmain.py's Simulator.run() retains a full
+    per-timestep history in memory (T_history etc.) before interpolating
+    down to the output grid, and empirically this - plus additional
+    per-step growth not eliminated by wrapping the DISORT forward pass in
+    torch.no_grad() (root cause not fully identified; measured ~14 GB per
+    1e6 total timesteps at a ~230-node grid, far more than the ~2 GB a
+    plain history list alone would predict) - is real and large enough to
+    have OOM-killed a real run (74 GB, macOS jetsam) at ~6.4e6 total
+    timesteps. Doubling stops (as a capped, non-converged result, same as
+    hitting max_doublings) if the *next* doubling would exceed this, rather
+    than attempting it and risking the machine again.
 
     Returns a dict: sim, converged (bool), n_doublings, tsteps_day,
     max_abs_diff (K, from the final comparison)."""
@@ -240,7 +254,17 @@ def run_with_convergence_check(build_and_run_fn, extract_fn, base_tsteps_day=500
     series_prev = extract_fn(sim_prev)
     max_abs_diff = None
     for n in range(1, max_doublings + 1):
-        tsteps_day *= 2
+        next_tsteps_day = tsteps_day * 2
+        if max_tsteps_day is not None and next_tsteps_day > max_tsteps_day:
+            print(f"  [convergence{label}] WARNING: stopping before tsteps_day="
+                  f"{next_tsteps_day} would exceed the memory-safety cap "
+                  f"(max_tsteps_day={max_tsteps_day}) - treating as non-converged "
+                  f"at tsteps_day={tsteps_day} (max_abs_diff={max_abs_diff} K) "
+                  f"rather than risking another OOM.")
+            return {'sim': sim_prev, 'converged': False, 'n_doublings': n - 1,
+                    'tsteps_day': tsteps_day, 'max_abs_diff': max_abs_diff,
+                    'hit_memory_cap': True}
+        tsteps_day = next_tsteps_day
         sim_cur = build_and_run_fn(tsteps_day)
         series_cur = extract_fn(sim_cur)
         max_abs_diff = float(np.max(np.abs(series_cur - series_prev)))
@@ -249,14 +273,15 @@ def run_with_convergence_check(build_and_run_fn, extract_fn, base_tsteps_day=500
                   f"max_abs_diff={max_abs_diff:.4f} K")
         if max_abs_diff < tol_K:
             return {'sim': sim_cur, 'converged': True, 'n_doublings': n,
-                    'tsteps_day': tsteps_day, 'max_abs_diff': max_abs_diff}
+                    'tsteps_day': tsteps_day, 'max_abs_diff': max_abs_diff,
+                    'hit_memory_cap': False}
         sim_prev, series_prev = sim_cur, series_cur
     print(f"  [convergence{label}] WARNING: did not converge within "
           f"{max_doublings} doublings (final tsteps_day={tsteps_day}, "
           f"max_abs_diff={max_abs_diff:.4f} K >= {tol_K} K) - result may still "
           f"contain significant numerical error.")
     return {'sim': sim_cur, 'converged': False, 'n_doublings': max_doublings,
-            'tsteps_day': tsteps_day, 'max_abs_diff': max_abs_diff}
+            'tsteps_day': tsteps_day, 'max_abs_diff': max_abs_diff, 'hit_memory_cap': False}
 
 
 # -----------------------------------------------------------------------------
@@ -1007,12 +1032,17 @@ if __name__ == "__main__":
     #
     # Speed adjustments (per user, after watching the first convergence-
     # checked run get expensive): convergence_tol_K relaxed 0.1->0.25 K,
-    # dust_rte_max_lthick nudged 0.05->0.075 tau (modest, deliberately kept
+    # dust_rte_max_lthick nudged 0.05->0.10 tau (modest, deliberately kept
     # in tau units - see build_rte_two_layer_sweep docstring), and the Mie
-    # file downsampled to 20 bands (from the full ~200) via n_bands - an
+    # file downsampled to 10 bands (from the full ~200) via n_bands - an
     # explicit, real accuracy tradeoff, not free; a smarter
     # property-change-weighted downsampling (vs. this uniform one) is a
-    # flagged follow-up, not implemented yet.
+    # flagged follow-up, not implemented yet. Also: rte_disort.py's
+    # disort_run is now wrapped in @torch.no_grad() - this is a pure
+    # inference loop (nothing here ever trains/backprops), and without it
+    # every DISORT forward call was retaining an autograd graph, which is
+    # what actually OOM-killed (74 GB, jetsam) the previous run of this
+    # exact sweep once tsteps_day grew into the millions.
     smoke_thicknesses = np.array([10.0e-6, 0.02])
 
     lut, biele_results, rte_results = run_full_analysis(
@@ -1025,9 +1055,9 @@ if __name__ == "__main__":
         enable_convergence_check=True,
         convergence_tol_K=0.25,
         max_doublings=8,
-        n_bands=20,
-        dust_rte_max_lthick=0.075,
-        run_tag='phaseA_smoketest_convcheck_v2',
+        n_bands=10,
+        dust_rte_max_lthick=0.10,
+        run_tag='phaseA_smoketest_convcheck_v3',
     )
 
     # --- Full production sweep (uncomment once Poisson's ratio / Young's
