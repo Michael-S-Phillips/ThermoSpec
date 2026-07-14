@@ -339,6 +339,7 @@ class DisortRTESolver:
 
 
 
+    @torch.no_grad()
     def disort_run(self, T, mu, F, Q=None, phi=None):
         #Solve RTE using DISORT for both visible and thermal bands.
         #mu, F, Q, and phi should all either be supplied as scalars or as arrays with length=n_cols

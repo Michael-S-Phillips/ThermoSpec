@@ -86,33 +86,76 @@ class LayerGrid:
             # Two-layer case - dust and rock layers
             # Calculate dust layer thicknesses in terms of optical depth tau
             dust_tau = cfg.dust_thickness * cfg.Et
-            nlay_dust_init = int(round(dust_tau / dust_lthick))
-            # revise actual layer thickness to match integer layer count
-            dust_lthick = dust_tau / nlay_dust_init
-            self.nlay_dust = nlay_dust_init
 
-            # Ensure minimum number of nodes in dust column
-            if(self.nlay_dust < cfg.min_nlay_dust):
-                dust_lthick = dust_tau / cfg.min_nlay_dust
-                self.nlay_dust = cfg.min_nlay_dust
+            if cfg.geometric_spacing:
+                # Geometric dust-node spacing (mirrors the single_layer branch
+                # above), stopping at the dust/rock interface (dust_tau)
+                # rather than the domain bottom edge. Grid size grows only
+                # logarithmically with dust_tau instead of linearly - this
+                # matters enormously for optically thick RTE dust layers,
+                # where uniform spacing can require thousands of layers
+                # (e.g. real Mie-calibrated Et for a 1um grain over a 5mm
+                # dust layer needs ~13000 uniform layers vs. ~130 geometric).
+                s = dust_lthick
+                x = [-dust_lthick/2.0, dust_lthick/2.0]  # virtual node and first node
+                l_thick = [dust_lthick, dust_lthick]
+                s *= cfg.spacing_factor
+                while x[-1] + s < dust_tau:
+                    l_thick.append(s)
+                    x.append(x[-1] + 0.5*l_thick[-2] + 0.5*l_thick[-1])
+                    s *= cfg.spacing_factor
+                self.nlay_dust = len(x) - 1
+
+                if self.nlay_dust < cfg.min_nlay_dust:
+                    # Too few layers for accuracy (e.g. very thin dust) -
+                    # fall back to uniform spacing with the enforced minimum
+                    # layer count, exactly as before this change.
+                    nlay_dust_init = cfg.min_nlay_dust
+                    dust_lthick = dust_tau / nlay_dust_init
+                    self.nlay_dust = nlay_dust_init
+                    x = [-dust_lthick/2.0, dust_lthick/2.0]
+                    l_thick = [dust_lthick, dust_lthick]
+                    for i in range(2, self.nlay_dust+1):
+                        x.append(x[-1] + dust_lthick)
+                        l_thick.append(dust_lthick)
+                else:
+                    # Absorb the residual gap into the last layer rather than
+                    # adding a separate (possibly degenerately thin) closing
+                    # layer - this is an internal material interface, not a
+                    # domain edge, so no ghost-node mirroring is needed here
+                    # (unlike the rock portion's bottom-boundary node below).
+                    last_edge = x[-1] + 0.5*l_thick[-1]
+                    residual = dust_tau - last_edge
+                    l_thick[-1] += residual
+                    x[-1] += 0.5*residual
+            else:
+                # Uniform dust-node spacing (original behavior).
+                nlay_dust_init = int(round(dust_tau / dust_lthick))
+                # revise actual layer thickness to match integer layer count
+                dust_lthick = dust_tau / nlay_dust_init
+                self.nlay_dust = nlay_dust_init
+
+                # Ensure minimum number of nodes in dust column
+                if(self.nlay_dust < cfg.min_nlay_dust):
+                    dust_lthick = dust_tau / cfg.min_nlay_dust
+                    self.nlay_dust = cfg.min_nlay_dust
+
+                #Calculate dust nodes. All layers have same thickness.
+                # Virtual top node and first real node in dust
+                x = [-dust_lthick/2.0, dust_lthick/2.0] #virtual node and first node.
+                l_thick = [dust_lthick, dust_lthick] #Virtual node and first node have same thickness
+                for i in range(2, self.nlay_dust+1):
+                    x.append(x[-1] + dust_lthick)
+                    l_thick.append(dust_lthick)
 
             # Rock layer count and thickness in tau units
             rock_tau = cfg.rock_thickness * cfg.Et
             rock_lthick_tau = rock_lthick*cfg.Et
 
-            #Calculate dust nodes. All layers have same thickness. 
-            # Virtual top node and first real node in dust
-            x = [-dust_lthick/2.0, dust_lthick/2.0] #virtual node and first node. 
-            l_thick = [dust_lthick, dust_lthick] #Virtual node and first node have same thickness
-            for i in range(2, self.nlay_dust+1):
-                x.append(x[-1] + dust_lthick)
-                l_thick.append(dust_lthick)
+            s = rock_lthick_tau  #first rock layer thickness, tau units.
+            L = dust_tau + rock_tau #Total dust column thickness in tau units.
 
-
-            s = rock_lthick_tau  #first rock layer thickness, tau units. 
-            L = dust_tau + rock_tau #Total dust column thickness in tau units. 
-
-            x.append(x[-1] + dust_lthick/2. + s/2.)  #First rock node
+            x.append(x[-1] + l_thick[-1]/2. + s/2.)  #First rock node
             l_thick.append(s)  
             s *= cfg.spacing_factor
 
@@ -120,7 +163,7 @@ class LayerGrid:
             # keep adding nodes until the next would go past L
             while x[-1] + s < L:
                 l_thick.append(s)
-                x.append(x[-1] + 0.5*l_thick[-1] + 0.5*l_thick[-1])
+                x.append(x[-1] + 0.5*l_thick[-2] + 0.5*l_thick[-1])
                 s *= cfg.spacing_factor  # increase spacing by factor
             
             last = L + (L - x[-1])
