@@ -65,6 +65,33 @@ def test_3d_spectra_match_1d_radiance_processor():
     assert err / scale < 1e-9, f"3D spectra vs 1D radiance processor: rel err {err/scale:.2e}"
 
 
+def test_spectra_distinct_columns_match_1d():
+    # Each column has a DIFFERENT profile; every column's spectrum must match the 1D radiance
+    # processor for that profile. Guards the [nwave,ncols]->[nx,ny,nwave] reshape ordering that
+    # the uniform-column test cannot see.
+    cfg = _cfg()
+    g = LayerGrid(cfg)
+    nz = g.x_num
+    profs = {
+        (0, 0): np.linspace(360.0, 250.0, nz),
+        (0, 1): np.linspace(330.0, 250.0, nz),
+        (1, 0): np.linspace(300.0, 250.0, nz),
+        (1, 1): np.linspace(390.0, 250.0, nz),
+    }
+    T_field = np.empty((2, 2, nz))
+    for (i, j), p in profs.items():
+        T_field[i, j] = p
+
+    wn, rad3d, _ = compute_spectra(cfg, g, T_field, observer_mu=1.0)
+    for (i, j), p in profs.items():
+        res = calculate_radiances_from_results(
+            (p[:, None], np.array([p[1]]), np.array([0.0])), config=cfg,
+            observer_mu=1.0, spectral_mode='hybrid', time_indices=[0], grid=g)
+        rad1d = np.asarray(res['radiance_thermal'])[0, :, 0]
+        err = np.max(np.abs(rad3d[i, j] - rad1d)) / np.max(np.abs(rad1d))
+        assert err < 1e-9, f"column ({i},{j}) spectrum mismatch: {err:.2e}"
+
+
 def test_phase_spectra_end_to_end():
     # Run a short DISORT 3D diurnal sim, record noon, and produce per-column noon spectra.
     from sim3d import Simulator3D

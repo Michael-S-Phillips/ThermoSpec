@@ -166,6 +166,34 @@ def test_hapke_rte_with_lateral_conduction_shadow():
     assert lit.T_surf[3:].mean() < iso.T_surf[3:].mean()
 
 
+def test_disort_per_column_illumination_ordering():
+    # With lateral conduction OFF, columns are independent, so distinct per-column illumination
+    # must map to the right columns. Guards the [ncols,nz]<->[nx,ny,nz] reshapes / mu_col / T_surf
+    # ordering that the uniform-field test cannot see.
+    base = dict(
+        use_RTE=True, RTE_solver='disort', thermal_evolution_mode='two_wave',
+        output_radiance_mode='two_wave', single_layer=True, diurnal=True, sun=True,
+        auto_dt=False, tsteps_day=1000, ndays=1, dust_thickness=0.05, Et=1000.0,
+        geometric_spacing=True, bottom_bc='dirichlet', T_bottom=250.0,
+        latitude=0.0, dec=0.0, P=88775.0, S=1361.0, nstr=4, nmom=4,
+        ssalb_therm=0.1, ssalb_vis=0.5, eta=1.0, g_therm=0.0, g_vis=0.0, R_base=0.0,
+        k_dust=7.4e-4, rho_dust=1100.0, cp_dust=825.0)
+    s = Simulator3D(SimulationConfig(**base), nx=3, ny=1, dx_m=0.02, dy_m=0.02, lateral_k=0.0)
+    s.mu_fac[1, 0] = 0.5                                  # middle column dimmed
+    s.run(record_phases=True)
+
+    # columns 0 and 2 have identical illumination -> bitwise identical (independent columns)
+    assert np.max(np.abs(s.T[0, 0] - s.T[2, 0])) < 1e-12
+    # the dimmed middle column is distinctly cooler at noon -> mu_fac hit the right column
+    assert s.Tsurf_noon[0, 0] - s.Tsurf_noon[1, 0] > 1.0
+
+    # column 0 (fully lit) matches a uniform all-lit run's column, tying ordering to the
+    # already-validated laterally-uniform 1D reduction
+    s2 = Simulator3D(SimulationConfig(**base), nx=2, ny=2, dx_m=0.02, dy_m=0.02, lateral_k=0.0)
+    s2.run()
+    assert np.max(np.abs(s.T[0, 0] - s2.T[0, 0])) < 1e-9
+
+
 def test_disort_rte_with_lateral_conduction_shadow():
     # Full stack: per-column DISORT RTE + 3D lateral conduction. A permanently shadowed half
     # (F_gate=0) radiates to space and cools; lateral conduction from the lit half warms it.
