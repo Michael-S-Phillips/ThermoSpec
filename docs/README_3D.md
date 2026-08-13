@@ -3,9 +3,10 @@
 A structured-grid, 3D-conduction thermal model built on ThermoSpec's existing 1D core. Heat
 conducts in all three directions; each surface column couples to radiation through the existing
 1D-per-column machinery (radiation in regolith is effectively vertical). Status: the thermal
-model is **fully 3D in conduction** and validated to reduce to the 1D `Simulator` exactly, in both
-the **non-RTE** and the **DISORT radiative-transfer** (`two_wave`, single-layer) paths. Remaining
-RTE variants (Hapke, multi_wave/hybrid spectra) are follow-ons — see "Not yet" below.
+model is **fully 3D in conduction** and validated to reduce to the 1D `Simulator` exactly, in the
+**non-RTE**, **DISORT**, and **Hapke** radiative-transfer paths (`two_wave`, single-layer), with
+**per-column emissivity/brightness-temperature spectra**. Remaining variants (multi_wave/hybrid
+thermal *evolution*, two-layer RTE) are follow-ons — see "Not yet" below.
 
 ## Modules
 
@@ -78,20 +79,18 @@ sim = Simulator3D(cfg, nx=8, ny=8, dx_m=0.05, dy_m=0.05, lateral_k=None)
 sim.F_gate[...] = ...   # optional shadow mask / sim.mu_fac for facet tilt
 sim.run()               # per step: one batched DISORT thermal + one visible solve over all columns
 ```
-Use a dt that resolves the near-surface layer (tsteps_day large enough that dt <~ 90 s); at coarse
-dt the model's own near-surface response is under-resolved. Per-column RTE dominates cost — see
-`docs/RATE_LIMITING_AND_PINN.md`.
+Set `RTE_solver='hapke'` instead for the fast broadband core (pure numpy, looped per column, no
+optics/torch) — ideal for large-grid scans; `'disort'` for the accurate N-stream solve. Use a dt
+that resolves the near-surface layer (dt <~ 20-90 s; Hapke's BVP feedback wants the finer end); at
+coarse dt the model's own near-surface response is under-resolved. Per-column RTE dominates cost —
+see `docs/RATE_LIMITING_AND_PINN.md`.
 
 ## Not yet (next phases)
 
-- **Hapke RTE in 3D.** `rte_hapke.compute_source` is scalar-per-column (no batching); a per-column
-  loop (each column carrying its own phi_vis/phi_therm state) would add the fast Hapke core.
 - **multi_wave / hybrid thermal *evolution* in 3D.** Emissivity/BT *spectra* are done
   (`radiance3d.py`, computed at output times from the converged field); driving the thermal
   *evolution* itself in multi_wave/hybrid (rather than two_wave) is the remaining variant, and the
   per-column spectral solve is the natural place for a learned surrogate.
-- **Lateral-sweep performance.** The per-depth `solve_banded` loop is ~90% of the conduction step and
-  should be replaced by a vectorized/batched tridiagonal (or a torch-MPS batched solve).
 - **Native integration.** Currently a companion module reusing the core; a future step could fold a
   `conduction_3d` mode into `modelmain.Simulator` directly.
 - **Two-layer RTE** (`single_layer=False`) needs the rock/dust interface source term handled in the

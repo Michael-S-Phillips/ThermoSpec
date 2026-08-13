@@ -6,13 +6,17 @@ noted. "step" = one implicit time step.
 
 ## Measured cost breakdown (non-RTE 3D conduction)
 
-| component | 16x16x83 | 32x32x83 | share | notes |
-|---|---|---|---|---|
-| **lateral ADI sweeps (x+y)** | 1.76 ms | 2.40 ms | **~90%** | per-depth Python loop: nz x 2 = 166 `solve_banded` calls/step |
-| z-sweep (vertical) | 0.10 ms | 0.32 ms | ~11% | one batched `solve_banded`, reuses `LayerGrid.diag` |
-| surface BC (Newton) | negligible | negligible | <1% | vectorized over columns |
-| full step | 1.86 ms | 2.71 ms | | 538 / 369 steps/s |
-| temp-dependent operator rebuild | 12.6 us / column | | episodic | only for columns whose T drifts > threshold |
+| component | 16x16x83 | 32x32x83 | notes |
+|---|---|---|---|
+| **lateral ADI sweeps (x+y)** | — | — | now a single vectorized Thomas solve per direction (was a per-depth `solve_banded` loop, ~90% of the step) |
+| z-sweep (vertical) | — | — | one batched `solve_banded`, reuses `LayerGrid.diag` |
+| surface BC (Newton) | negligible | negligible | vectorized over columns |
+| **full step (after Thomas)** | 0.41 ms | 1.39 ms | 2413 / 718 steps/s (was 1.86 / 2.71 ms; ~2x at 32^2, ~4.5x at 16^2) |
+| temp-dependent operator rebuild | 12.6 us / column | | episodic; only for columns whose T drifts > threshold |
+
+The vectorized Thomas lateral sweep (committed) removed the per-depth `solve_banded` LAPACK-call
+overhead. Remaining conduction cost is transpose/copy + the z-sweep; further gains would come from
+a torch-MPS batched tridiagonal (torch is already a dependency).
 
 Projected wall time (800k-step, 8-lunation run): ~36 min at 32x32x83, non-RTE.
 
