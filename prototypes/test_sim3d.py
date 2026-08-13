@@ -89,6 +89,15 @@ def test_matches_1d_with_temperature_dependent_cp():
     assert dT < 1e-5 and dTs < 1e-5, f"temp-dependent cp: dT={dT:.2e}, dTs={dTs:.2e}"
 
 
+def test_matches_1d_with_temperature_dependent_k():
+    # temp_dependent_k changes grid.cond, which the surface BC's k_dx must track per column.
+    dT, dTs = _run_match(dict(
+        geometric_spacing=True,
+        temperature_dependent_properties=True, temp_dependent_k=True,
+        temp_change_threshold=1.0, k_temp_coeff=2.7 / (350.0**3)))
+    assert dT < 1e-5 and dTs < 1e-5, f"temp-dependent k: dT={dT:.2e}, dTs={dTs:.2e}"
+
+
 def test_lateral_conduction_warms_shadowed_columns():
     # nx=6 columns; the x<3 half is permanently shadowed (F_gate=0).
     def build(lateral_k):

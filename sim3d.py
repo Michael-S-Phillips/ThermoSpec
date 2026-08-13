@@ -47,9 +47,11 @@ class Simulator3D:
         # surface-BC constants, identical to modelmain._T_surf_calc / _bc_noRTE
         g = self.base
         Et = cfg.Et
-        Et1 = Et[1] if np.ndim(Et) else Et
-        self._dx_surf = ((g.x[1] - g.x[0]) / 2.0) / Et1
-        self._k_dx = g.cond[1] / Et1**2 / self._dx_surf
+        self._Et1 = Et[1] if np.ndim(Et) else Et
+        self._dx_surf = ((g.x[1] - g.x[0]) / 2.0) / self._Et1
+        # k_dx is per column so it can track a column's node-1 conductivity when
+        # temp_dependent_k rebuilds it (modelmain._T_surf_calc reads grid.cond[1] live).
+        self._k_dx = np.full((self.nx, self.ny), g.cond[1] / self._Et1**2 / self._dx_surf)
         self._x0, self._x1 = g.x[0], g.x[1]
 
         self._setup_temperature_dependence()
@@ -106,6 +108,11 @@ class Simulator3D:
                 heat_c, cond_c = self._col_heat_cond(flatT[c])
                 self._diag_cols[c] = build_vertical_diag(
                     self._lthick, self._dens, heat_c, cond_c, self.base.dt)
+                if cfg.temp_dependent_k:
+                    # track this column's node-1 conductivity in its surface BC, as the 1D
+                    # model does via the live grid.cond[1] (modelmain._T_surf_calc).
+                    i, j = divmod(c, self.ny)
+                    self._k_dx[i, j] = cond_c[1] / self._Et1**2 / self._dx_surf
                 self._T_last[c] = flatT[c].copy()
                 changed = True
         if changed and not self.vol._lateral_off:

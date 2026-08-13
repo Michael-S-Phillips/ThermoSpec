@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from config import SimulationConfig      # noqa: E402
 from grid import LayerGrid               # noqa: E402
-from grid3d import VolumeGrid, _lateral_banded_neumann  # noqa: E402
+from grid3d import VolumeGrid, _lateral_banded_neumann, build_vertical_diag  # noqa: E402
 
 
 def _base():
@@ -28,8 +28,31 @@ def _base():
         depth_dependent_properties=False, temperature_dependent_properties=False,
         auto_dt=False, tsteps_day=1000, ndays=1,
         dust_thickness=0.05, Et=1000.0, geometric_spacing=False, bottom_bc='dirichlet',
+        k_dust=5.5e-4, rho_dust=1100.0, cp_dust=825.0,
     )
     return cfg, LayerGrid(cfg)
+
+
+def test_lateral_r_equals_physical_diffusivity():
+    """Pin the tau conversion quantitatively: the lateral coefficient the code builds must equal
+    the PHYSICAL r = dt * (k/(rho*cp)) / dx_m^2. A wrong Et power (the single most error-prone
+    line) would be off by Et^2 = 1e6 and fail this, though the uniform-field reduce-to-1D tests
+    would not notice (their lateral operator is identity for any r)."""
+    cfg, g = _base()
+    dx_m = 0.02
+    vg = VolumeGrid(g, nx=5, ny=5, dx_m=dx_m, dy_m=dx_m, lateral_k=None)
+    kmid = g.x_num // 2                                   # an interior (real) depth node
+    r_used = (vg._abx[kmid][1, 2] - 1.0) / 2.0            # interior main diag = 1 + 2r
+    r_phys = g.dt * (cfg.k_dust / (cfg.rho_dust * cfg.cp_dust)) / dx_m**2
+    assert abs(r_used - r_phys) / r_phys < 1e-10, f"lateral r={r_used:.3e} vs physical {r_phys:.3e}"
+
+
+def test_build_vertical_diag_matches_layergrid():
+    """Pin build_vertical_diag against the 1D LayerGrid operator so the temp-dependent per-column
+    stencil cannot silently drift from grid.py's formula."""
+    cfg, g = _base()
+    ab = build_vertical_diag(g.l_thick, g.dens, g.heat, g.cond, g.dt)
+    assert np.max(np.abs(ab - g.diag)) < 1e-12
 
 
 def test_z_sweep_matches_1d_when_lateral_off():
