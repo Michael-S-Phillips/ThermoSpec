@@ -65,23 +65,35 @@ class Simulator3D:
         """
         if not self._use_rte:
             return
-        if self.cfg.RTE_solver != 'disort':
-            raise NotImplementedError(
-                "Simulator3D RTE currently supports RTE_solver='disort' "
-                "(Hapke is scalar-per-column; a per-column loop is a later addition).")
-        if self.cfg.thermal_evolution_mode != 'two_wave':
-            raise NotImplementedError(
-                "Simulator3D RTE currently supports thermal_evolution_mode='two_wave'.")
         if not self.cfg.single_layer:
             raise NotImplementedError("Simulator3D RTE currently supports single_layer=True.")
-        from rte_disort import DisortRTESolver
         ncols = self.nx * self.ny
-        self._rte = DisortRTESolver(self.cfg, self.base, n_cols=ncols,
-                                    output_radiance=False, planck=True, solver_mode='two_wave')
-        self._rte_vis = DisortRTESolver(self.cfg, self.base, n_cols=ncols,
-                                        output_radiance=False, planck=False, solver_mode='two_wave')
+        if self.cfg.RTE_solver == 'disort':
+            if self.cfg.thermal_evolution_mode != 'two_wave':
+                raise NotImplementedError(
+                    "Simulator3D DISORT RTE currently supports thermal_evolution_mode='two_wave'.")
+            from rte_disort import DisortRTESolver
+            self._rte = DisortRTESolver(self.cfg, self.base, n_cols=ncols,
+                                        output_radiance=False, planck=True, solver_mode='two_wave')
+            self._rte_vis = DisortRTESolver(self.cfg, self.base, n_cols=ncols,
+                                            output_radiance=False, planck=False, solver_mode='two_wave')
+        elif self.cfg.RTE_solver == 'hapke':
+            # Hapke is scalar-per-column (broadband); loop columns with per-column BVP state,
+            # exactly as the 1D model and its crater path do (modelmain.py:841, :992).
+            from rte_hapke import RadiativeTransfer
+            self._rte_hapke = RadiativeTransfer(self.cfg, self.base)
+            nlb = self.base.nlay_dust + 1
+            self._phi_vis = np.zeros((ncols, nlb))
+            self._phi_therm = np.zeros((ncols, nlb))
+        else:
+            raise NotImplementedError(f"Unknown RTE_solver: {self.cfg.RTE_solver}")
 
     def _rte_step(self, j):
+        if self.cfg.RTE_solver == 'disort':
+            return self._rte_step_disort(j)
+        return self._rte_step_hapke(j)
+
+    def _rte_step_disort(self, j):
         """Run DISORT for all columns at this step; return the 3D source and set self.T_surf.
 
         Mirrors the DISORT branch of modelmain.Simulator.run (two_wave): a thermal (planck)
@@ -103,6 +115,28 @@ class Simulator3D:
             src = src_th
         self.T_surf = (flup_th / self.cfg.sigma).reshape(self.nx, self.ny) ** 0.25
         return src.reshape(self.nx, self.ny, nz)
+
+    def _rte_step_hapke(self, j):
+        """Hapke RTE per column (loop; scalar-per-column solver). Returns the 3D source and sets
+        self.T_surf. Mirrors modelmain's Hapke branch: compute_source returns a combined
+        (visible+thermal) volumetric source and updates the per-column BVP state; the upward
+        thermal flux is phi_therm[0]*2*pi -> brightness T_surf."""
+        ncols, nz = self.nx * self.ny, self.nz
+        mu_col = (self.mu_array[j] * self.mu_fac).reshape(ncols)
+        F_col = (self.F_array[j] * self.F_gate).reshape(ncols)
+        Tcols = self.T.reshape(ncols, nz)                        # row c = full column profile
+        x_RTE, x_b = self.base.x_RTE, self.base.x_boundaries
+        source = np.zeros((ncols, nz))
+        Tsurf = np.empty(ncols)
+        two_pi_sigma = 2.0 * np.pi / self.cfg.sigma
+        for c in range(ncols):
+            s, self._phi_vis[c], self._phi_therm[c] = self._rte_hapke.compute_source(
+                Tcols[c], x_RTE, x_b, self._phi_vis[c], self._phi_therm[c],
+                float(mu_col[c]), float(F_col[c]))
+            source[c] = s
+            Tsurf[c] = (self._phi_therm[c][0] * two_pi_sigma) ** 0.25
+        self.T_surf = Tsurf.reshape(self.nx, self.ny)
+        return source.reshape(self.nx, self.ny, nz)
 
     def _rte_bc(self):
         """RTE surface/bottom BC (modelmain._bc, use_RTE branch): Neumann top, then bottom."""
