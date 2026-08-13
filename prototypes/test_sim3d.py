@@ -48,6 +48,36 @@ def test_laterally_uniform_matches_1d_simulator():
     assert dTs < 1e-6, f"3D surface T diverged from 1D by {dTs:.2e} K"
 
 
+def _run_match(cfg_kwargs):
+    base = dict(
+        use_RTE=False, single_layer=True, diurnal=True, sun=True,
+        temperature_dependent_properties=False,
+        auto_dt=False, tsteps_day=500, ndays=2, dust_thickness=0.05, Et=1000.0,
+        bottom_bc='dirichlet', T_bottom=250.0, latitude=0.0, dec=0.0, P=88775.0,
+        S=1361.0, R=1.0, em=0.95, albedo=0.1, k_dust=0.01, rho_dust=1500.0, cp_dust=800.0,
+    )
+    base.update(cfg_kwargs)
+    sim1d = Simulator(SimulationConfig(**base))
+    sim1d.run()
+    sim3d = Simulator3D(SimulationConfig(**base), nx=3, ny=2, dx_m=0.02, dy_m=0.02)
+    sim3d.run()
+    return np.max(np.abs(sim3d.T - sim1d.T[None, None, :])), \
+        np.max(np.abs(sim3d.T_surf - sim1d.T_surf))
+
+
+def test_matches_1d_with_geometric_nonuniform_grid():
+    dT, dTs = _run_match(dict(geometric_spacing=True, depth_dependent_properties=False))
+    assert dT < 1e-6 and dTs < 1e-6, f"geometric grid: dT={dT:.2e}, dTs={dTs:.2e}"
+
+
+def test_matches_1d_with_depth_dependent_properties():
+    dT, dTs = _run_match(dict(
+        geometric_spacing=True, depth_dependent_properties=True,
+        rho_surface=1100.0, rho_deep=1800.0, rho_particle=3000.0,
+        k_surface=7.4e-4, k_deep=3.4e-3, density_scale_height=0.06))
+    assert dT < 1e-6 and dTs < 1e-6, f"depth-dependent: dT={dT:.2e}, dTs={dTs:.2e}"
+
+
 def test_lateral_conduction_warms_shadowed_columns():
     # nx=6 columns; the x<3 half is permanently shadowed (F_gate=0).
     def build(lateral_k):
