@@ -30,6 +30,9 @@ def _lateral_banded_neumann(n, r):
     r = 0.
     """
     ab = np.zeros((3, n))
+    if n == 1:
+        ab[1, 0] = 1.0          # a single isolated node has no neighbours: identity
+        return ab
     ab[1, :] = 1.0 + 2.0 * r
     ab[1, 0] = 1.0 + r          # zero-flux at the two ends: one neighbour only
     ab[1, -1] = 1.0 + r
@@ -77,6 +80,13 @@ class VolumeGrid:
             dy_tau = dy_m * Et_arr
             rx = self.dt * fac * Kz / dx_tau**2
             ry = self.dt * fac * Kz / dy_tau**2
+            # The top (index 0) and bottom (index -1) depth nodes are boundary/virtual ghosts
+            # re-set by the caller's BC every step -- the top ghost holds 2*T_surf - T1, not a
+            # physical temperature. They must NOT participate in lateral conduction, or the
+            # lateral sweep diffuses non-physical ghost values between columns. Only real
+            # subsurface nodes (1..nz-2) conduct laterally.
+            rx[0] = rx[-1] = 0.0
+            ry[0] = ry[-1] = 0.0
 
         self._abx = [_lateral_banded_neumann(self.nx, float(rx[k])) for k in range(self.nz)]
         self._aby = [_lateral_banded_neumann(self.ny, float(ry[k])) for k in range(self.nz)]
