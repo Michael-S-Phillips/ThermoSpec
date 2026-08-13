@@ -1,17 +1,18 @@
 # 3D conduction in ThermoSpec
 
 A structured-grid, 3D-conduction thermal model built on ThermoSpec's existing 1D core. Heat
-conducts in all three directions; each surface column still couples to radiation through the
-existing 1D-per-column machinery (radiation in regolith is effectively vertical). Status: the
-**non-RTE (traditional) thermal model is fully 3D in conduction** and validated to reduce to the
-1D `Simulator` exactly. RTE coupling is the next phase (see "Not yet" below).
+conducts in all three directions; each surface column couples to radiation through the existing
+1D-per-column machinery (radiation in regolith is effectively vertical). Status: the thermal
+model is **fully 3D in conduction** and validated to reduce to the 1D `Simulator` exactly, in both
+the **non-RTE** and the **DISORT radiative-transfer** (`two_wave`, single-layer) paths. Remaining
+RTE variants (Hapke, multi_wave/hybrid spectra) are follow-ons — see "Not yet" below.
 
 ## Modules
 
 | file | role |
 |---|---|
 | `grid3d.py` | `VolumeGrid`: one LOD-ADI implicit conduction step over an [nx,ny,nz] field. Reuses `LayerGrid.diag` for the vertical sweep; builds conservative Neumann-wall lateral operators. Supports per-column vertical operators for temperature-dependent properties. |
-| `sim3d.py` | `Simulator3D`: non-RTE diurnal driver. Per-column nonlinear surface energy balance (vectorized copy of `modelmain._T_surf_calc`), bottom BC, temperature-dependent property updates. |
+| `sim3d.py` | `Simulator3D`: diurnal driver. Non-RTE path (per-column nonlinear surface energy balance, vectorized copy of `modelmain._T_surf_calc`) and RTE path (batched DISORT over all columns, `n_cols=nx*ny`; Neumann surface BC). Bottom BC + temperature-dependent property updates in both. |
 | `prototypes/adi3d.py` | standalone LOD-ADI reference solver (uniform grid, constant props) + its machine-precision eigenmode tests and the wall-time benchmark. |
 | `prototypes/test_*.py` | test suites (run directly; no pytest needed). |
 | `docs/RATE_LIMITING_AND_PINN.md` | measured cost breakdown + where surrogate models pay off. |
@@ -62,18 +63,37 @@ lateral illumination contrast -- the driver of lateral heat flow.
   depth-dependent grids, and to <1e-5 with temperature-dependent cp (mid-run operator rebuilds).
 - Lateral conduction warms a permanently shadowed half and cools the lit half (physical transport).
 
+## RTE usage (DISORT)
+
+```python
+cfg = SimulationConfig(
+    use_RTE=True, RTE_solver='disort', thermal_evolution_mode='two_wave',
+    single_layer=True, diurnal=True, sun=True, geometric_spacing=True,
+    auto_dt=False, tsteps_day=100000, ndays=8, dust_thickness=0.5, T_bottom=250.0,
+    latitude=0.0, dec=0.0, P=29.5306*24*3600, S=1361.0, nstr=4, nmom=4,
+    ssalb_therm=0.1, ssalb_vis=0.5, eta=1.0,
+)
+sim = Simulator3D(cfg, nx=8, ny=8, dx_m=0.05, dy_m=0.05, lateral_k=None)
+sim.F_gate[...] = ...   # optional shadow mask / sim.mu_fac for facet tilt
+sim.run()               # per step: one batched DISORT thermal + one visible solve over all columns
+```
+Use a dt that resolves the near-surface layer (tsteps_day large enough that dt <~ 90 s); at coarse
+dt the model's own near-surface response is under-resolved. Per-column RTE dominates cost — see
+`docs/RATE_LIMITING_AND_PINN.md`.
+
 ## Not yet (next phases)
 
-- **RTE per column.** Wire the existing 1D DISORT/Hapke solve into each surface column and inject its
-  flux-divergence source into that column's top cells (`rte_disort.py`/`rte_hapke.py` unchanged). This
-  is the expensive part -- see `docs/RATE_LIMITING_AND_PINN.md`; it is also where a learned surrogate
-  belongs.
+- **Hapke RTE in 3D.** `rte_hapke.compute_source` is scalar-per-column (no batching); a per-column
+  loop (each column carrying its own phi_vis/phi_therm state) would add the fast Hapke core.
+- **multi_wave / hybrid evolution and emissivity spectra in 3D.** Currently `two_wave` only; the
+  spectral output path (per-column, at output times) is the natural place for a learned surrogate.
 - **Lateral-sweep performance.** The per-depth `solve_banded` loop is ~90% of the conduction step and
   should be replaced by a vectorized/batched tridiagonal (or a torch-MPS batched solve).
 - **Native integration.** Currently a companion module reusing the core; a future step could fold a
   `conduction_3d` mode into `modelmain.Simulator` directly.
-- **Temperature-dependent k** is supported in the operator but the surface-BC `k_dx` uses the static
-  conductivity; refine if `temp_dependent_k=True` is needed (the lunar runs use `temp_dependent_k=False`).
+- **Two-layer RTE** (`single_layer=False`) needs the rock/dust interface source term handled in the
+  3D step (`modelmain._fd1d_heat_implicit_diag` has special interface-node handling with no analogue
+  here yet).
 
 ## Running the tests
 
