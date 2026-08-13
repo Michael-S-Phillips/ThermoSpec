@@ -87,10 +87,12 @@ see `docs/RATE_LIMITING_AND_PINN.md`.
 
 ## Not yet (next phases)
 
-- **multi_wave / hybrid thermal *evolution* in 3D.** Emissivity/BT *spectra* are done
-  (`radiance3d.py`, computed at output times from the converged field); driving the thermal
-  *evolution* itself in multi_wave/hybrid (rather than two_wave) is the remaining variant, and the
-  per-column spectral solve is the natural place for a learned surrogate.
+- **multi_wave thermal evolution** is blocked by the absent solar-spectrum files (same reason as
+  multi_wave *output*); use `hybrid` or `two_wave`. **Hybrid** thermal evolution IS supported
+  (`thermal_evolution_mode='hybrid'`) but is ~850x two_wave per column (one DISORT per band) --
+  practical only for small grids / short runs, or as ground truth for a learned per-column source
+  surrogate (see `docs/RATE_LIMITING_AND_PINN.md`). two_wave evolution + hybrid *output*
+  (`radiance3d.py`) remains the practical path for production.
 - **Native integration.** Currently a companion module reusing the core; a future step could fold a
   `conduction_3d` mode into `modelmain.Simulator` directly.
 - **Two-layer RTE** (`single_layer=False`) needs the rock/dust interface source term handled in the
