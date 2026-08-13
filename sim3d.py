@@ -23,7 +23,7 @@ import numpy as np
 
 from config import SimulationConfig
 from grid import LayerGrid
-from grid3d import VolumeGrid
+from grid3d import VolumeGrid, build_vertical_diag
 
 
 class Simulator3D:
@@ -51,6 +51,76 @@ class Simulator3D:
         self._dx_surf = ((g.x[1] - g.x[0]) / 2.0) / Et1
         self._k_dx = g.cond[1] / Et1**2 / self._dx_surf
         self._x0, self._x1 = g.x[0], g.x[1]
+
+        self._setup_temperature_dependence()
+
+    def _setup_temperature_dependence(self):
+        """Prepare per-column vertical operators when properties depend on temperature.
+
+        Mirrors grid.check_and_update_temperature_dependent_properties, but per column: each
+        column rebuilds its own vertical operator from its own cp(T)/k(T) once its temperature
+        has drifted past temp_change_threshold since its last rebuild. For a laterally-uniform
+        field every column tracks the 1D operator in lockstep.
+        """
+        cfg = self.cfg
+        g = self.base
+        self._temp_dep = (cfg.temperature_dependent_properties
+                          and (cfg.temp_dependent_cp or cfg.temp_dependent_k))
+        if not self._temp_dep:
+            return
+        ncols = self.nx * self.ny
+        self._lthick = g.l_thick
+        self._dens = g.dens
+        self._cond_base = np.asarray(g.cond, dtype=float).copy()   # static unless temp_dependent_k
+        Et = cfg.Et
+        self._Et2 = (np.asarray(Et)**2 if np.ndim(Et) else float(Et)**2)
+        self._k_base = (g.k_depth.copy() if getattr(g, 'k_depth', None) is not None
+                        else np.full(self.nz, cfg.k_dust))
+        # base_grid.diag was already built with cp(T_bottom); start every column from it
+        self._diag_cols = [np.array(g.diag, dtype=float) for _ in range(ncols)]
+        self._T_last = self.T.reshape(ncols, self.nz).copy()
+        self.vol.set_vertical_diag_cols(self._diag_cols)
+
+    def _col_heat_cond(self, Tc):
+        cfg = self.cfg
+        if cfg.temp_dependent_cp:
+            c0, c1, c2, c3, c4 = cfg.cp_coeffs
+            heat_c = c0 + c1 * Tc + c2 * Tc**2 + c3 * Tc**3 + c4 * Tc**4
+        else:
+            heat_c = self.base.heat
+        if cfg.temp_dependent_k:
+            cond_c = self._k_base * (1.0 + cfg.k_temp_coeff * Tc**3) * self._Et2
+        else:
+            cond_c = self._cond_base
+        return heat_c, cond_c
+
+    def _update_operators(self):
+        """Rebuild per-column vertical operators (and the lateral diffusivity) as T drifts."""
+        if not self._temp_dep:
+            return
+        cfg = self.cfg
+        flatT = self.T.reshape(self.nx * self.ny, self.nz)
+        changed = False
+        for c in range(flatT.shape[0]):
+            if np.max(np.abs(flatT[c] - self._T_last[c])) > cfg.temp_change_threshold:
+                heat_c, cond_c = self._col_heat_cond(flatT[c])
+                self._diag_cols[c] = build_vertical_diag(
+                    self._lthick, self._dens, heat_c, cond_c, self.base.dt)
+                self._T_last[c] = flatT[c].copy()
+                changed = True
+        if changed and not self.vol._lateral_off:
+            # lateral operators use a laterally-representative diffusivity K(z) = cond/(dens*heat)
+            if cfg.temp_dependent_cp:
+                c0, c1, c2, c3, c4 = cfg.cp_coeffs
+                heat_all = c0 + c1 * self.T + c2 * self.T**2 + c3 * self.T**3 + c4 * self.T**4
+            else:
+                heat_all = self.base.heat[None, None, :]
+            if cfg.temp_dependent_k:
+                cond_all = self._k_base * (1.0 + cfg.k_temp_coeff * self.T**3) * self._Et2
+            else:
+                cond_all = self._cond_base[None, None, :]
+            K_mean = (cond_all / (self._dens * heat_all)).mean(axis=(0, 1))
+            self.vol.set_lateral_diffusivity(K_mean)
 
     def _setup_solar(self):
         cfg = self.cfg
@@ -92,6 +162,7 @@ class Simulator3D:
         surf_hist = []
         for j in range(self.t_num):
             if j > 0:
+                self._update_operators()                     # temp-dependent props (no-op if off)
                 self.T = self.vol.step(self.T, 0.0)          # non-RTE: no volumetric source
                 self._surface_bc(self.mu_array[j], self.F_array[j])
             if record_surf:

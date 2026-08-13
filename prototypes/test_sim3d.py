@@ -78,6 +78,17 @@ def test_matches_1d_with_depth_dependent_properties():
     assert dT < 1e-6 and dTs < 1e-6, f"depth-dependent: dT={dT:.2e}, dTs={dTs:.2e}"
 
 
+def test_matches_1d_with_temperature_dependent_cp():
+    # cp(T) drifts as the surface heats/cools, so the operator is rebuilt mid-run; the 3D
+    # per-column operators must track the 1D single operator (identical for a uniform field).
+    dT, dTs = _run_match(dict(
+        geometric_spacing=True,
+        temperature_dependent_properties=True, temp_dependent_cp=True,
+        temp_change_threshold=1.0,
+        cp_coeffs=[-3.6125, 2.7431, 2.3616e-3, -1.2340e-5, 8.9093e-9]))
+    assert dT < 1e-5 and dTs < 1e-5, f"temp-dependent cp: dT={dT:.2e}, dTs={dTs:.2e}"
+
+
 def test_lateral_conduction_warms_shadowed_columns():
     # nx=6 columns; the x<3 half is permanently shadowed (F_gate=0).
     def build(lateral_k):
