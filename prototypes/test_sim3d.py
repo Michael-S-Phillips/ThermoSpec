@@ -166,6 +166,33 @@ def test_hapke_rte_with_lateral_conduction_shadow():
     assert lit.T_surf[3:].mean() < iso.T_surf[3:].mean()
 
 
+def test_disort_hybrid_evolution_matches_1d():
+    # Spectral (multi-wave, ~916-band) thermal evolution -- EXPENSIVE, so a short 10-step run.
+    # Validates that hybrid-mode evolution in 3D reduces to the 1D hybrid Simulator.
+    OPT = os.path.join(ROOT, "Optical_props")
+    enst = os.path.join(OPT, "enst_300K_mie_combined.txt")
+    wnb = os.path.join(OPT, "enst_300K_wn_bounds.txt")
+    sub = os.path.join(OPT, "sabel_enstatite.txt")
+    base = dict(
+        use_RTE=True, RTE_solver='disort', thermal_evolution_mode='hybrid',
+        output_radiance_mode='hybrid', single_layer=True, diurnal=True, sun=True,
+        depth_dependent_properties=False, temperature_dependent_properties=False,
+        auto_dt=False, tsteps_day=10, ndays=1, dust_thickness=0.05, Et=1000.0,
+        geometric_spacing=True, bottom_bc='dirichlet', T_bottom=250.0,
+        latitude=0.0, dec=0.0, P=88775.0, S=1361.0, nstr=4, nmom=4,
+        ssalb_therm=0.1, ssalb_vis=0.5, eta=1.0, fill_frac=0.37, radius=14.0e-6, use_spec=False,
+        k_dust=7.4e-4, rho_dust=1100.0, cp_dust=825.0,
+        mie_file=enst, mie_file_out=enst, wn_bounds=wnb, wn_bounds_out=wnb,
+        substrate_spectrum=sub, substrate_spectrum_out=sub)
+    sim1d = Simulator(SimulationConfig(**base))
+    sim1d.run()
+    sim3d = Simulator3D(SimulationConfig(**base), nx=2, ny=2, dx_m=0.02, dy_m=0.02)
+    sim3d.run()
+    dT = np.max(np.abs(sim3d.T - sim1d.T[None, None, :]))
+    dTs = np.max(np.abs(sim3d.T_surf - sim1d.T_surf))
+    assert dT < 1e-8 and dTs < 1e-8, f"hybrid evolution 3D vs 1D: dT={dT:.2e}, dTs={dTs:.2e}"
+
+
 def test_disort_per_column_illumination_ordering():
     # With lateral conduction OFF, columns are independent, so distinct per-column illumination
     # must map to the right columns. Guards the [ncols,nz]<->[nx,ny,nz] reshapes / mu_col / T_surf

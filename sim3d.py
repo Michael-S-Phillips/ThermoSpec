@@ -69,14 +69,30 @@ class Simulator3D:
             raise NotImplementedError("Simulator3D RTE currently supports single_layer=True.")
         ncols = self.nx * self.ny
         if self.cfg.RTE_solver == 'disort':
-            if self.cfg.thermal_evolution_mode != 'two_wave':
-                raise NotImplementedError(
-                    "Simulator3D DISORT RTE currently supports thermal_evolution_mode='two_wave'.")
             from rte_disort import DisortRTESolver
-            self._rte = DisortRTESolver(self.cfg, self.base, n_cols=ncols,
-                                        output_radiance=False, planck=True, solver_mode='two_wave')
-            self._rte_vis = DisortRTESolver(self.cfg, self.base, n_cols=ncols,
-                                            output_radiance=False, planck=False, solver_mode='two_wave')
+            mode = self.cfg.thermal_evolution_mode
+            if mode == 'two_wave':
+                self._rte = DisortRTESolver(self.cfg, self.base, n_cols=ncols,
+                                            output_radiance=False, planck=True, solver_mode='two_wave')
+                self._rte_vis = DisortRTESolver(self.cfg, self.base, n_cols=ncols,
+                                                output_radiance=False, planck=False, solver_mode='two_wave')
+            elif mode == 'hybrid':
+                # spectral thermal (multi-wave, Planck-only -> no solar file) + broadband visible.
+                # EXPENSIVE: the thermal solve is ~850x two_wave (one DISORT per wavenumber band),
+                # and cost scales with column count -- practical only for small grids / short runs,
+                # or as ground truth for a learned per-column source surrogate.
+                self._rte = DisortRTESolver(self.cfg, self.base, n_cols=ncols, output_radiance=False,
+                                            planck=True, solver_mode='hybrid',
+                                            spectral_component='thermal_only')
+                self._rte_vis = DisortRTESolver(self.cfg, self.base, n_cols=ncols, output_radiance=False,
+                                                planck=False, solver_mode='hybrid',
+                                                spectral_component='visible_only')
+            elif mode == 'multi_wave':
+                raise NotImplementedError(
+                    "multi_wave thermal evolution needs solar-spectrum files, which are absent "
+                    "from the repo; use thermal_evolution_mode='hybrid' or 'two_wave'.")
+            else:
+                raise NotImplementedError(f"Unknown thermal_evolution_mode: {mode}")
         elif self.cfg.RTE_solver == 'hapke':
             # Hapke is scalar-per-column (broadband); loop columns with per-column BVP state,
             # exactly as the 1D model and its crater path do (modelmain.py:841, :992).
@@ -107,13 +123,15 @@ class Simulator3D:
 
         src_th, flup_th = self._rte.disort_run(Tflat, mu_col.copy(), F_col.copy())
         src_th = np.asarray(src_th)                                        # [ncols, nz]
-        flup_th = np.asarray(flup_th).reshape(ncols)
+        flup_th = np.asarray(flup_th)
+        # two_wave gives upward flux [ncols]; hybrid/multi-wave gives [nwave, ncols] -> sum bands
+        flup_col = flup_th.sum(axis=0) if flup_th.ndim == 2 else flup_th.reshape(ncols)
         if np.any(F_col > 0.001):
             src_vis, _ = self._rte_vis.disort_run(Tflat, mu_col.copy(), F_col.copy())
             src = src_th + np.asarray(src_vis)
         else:
             src = src_th
-        self.T_surf = (flup_th / self.cfg.sigma).reshape(self.nx, self.ny) ** 0.25
+        self.T_surf = (flup_col / self.cfg.sigma).reshape(self.nx, self.ny) ** 0.25
         return src.reshape(self.nx, self.ny, nz)
 
     def _rte_step_hapke(self, j):
