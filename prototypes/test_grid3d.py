@@ -42,7 +42,7 @@ def test_lateral_r_equals_physical_diffusivity():
     dx_m = 0.02
     vg = VolumeGrid(g, nx=5, ny=5, dx_m=dx_m, dy_m=dx_m, lateral_k=None)
     kmid = g.x_num // 2                                   # an interior (real) depth node
-    r_used = (vg._abx[kmid][1, 2] - 1.0) / 2.0            # interior main diag = 1 + 2r
+    r_used = vg._rx[kmid]                                 # lateral coefficient at that depth
     r_phys = g.dt * (cfg.k_dust / (cfg.rho_dust * cfg.cp_dust)) / dx_m**2
     assert abs(r_used - r_phys) / r_phys < 1e-10, f"lateral r={r_used:.3e} vs physical {r_phys:.3e}"
 

@@ -40,6 +40,50 @@ def build_vertical_diag(lthick, dens, heat, cond, dt):
     return fd1d_heat_implicit_diagonal_nonuniform_kieffer(len(lthick), A1, A2, A3)
 
 
+def _neumann_tridiag(n, r):
+    """Tridiagonal diagonals (low, diag, up) of (I - r D2) for an n-node Neumann line, per depth.
+
+    r is an array [nz]; returns three [nz, n] arrays. Zero-flux end walls; r=0 gives identity, so
+    the virtual top/bottom depth nodes (r set to 0) pass through unchanged. Thomas convention:
+    low[k,i]*x[i-1] + diag[k,i]*x[i] + up[k,i]*x[i+1] = d[i]  (low[:,0], up[:,-1] unused).
+    """
+    r = np.asarray(r, float)
+    nz = r.shape[0]
+    diag = np.ones((nz, n))
+    low = np.zeros((nz, n))
+    up = np.zeros((nz, n))
+    if n == 1:
+        return low, diag, up                         # single node: identity
+    diag[:] = 1.0 + 2.0 * r[:, None]
+    diag[:, 0] = 1.0 + r
+    diag[:, -1] = 1.0 + r
+    up[:, :-1] = -r[:, None]
+    low[:, 1:] = -r[:, None]
+    return low, diag, up
+
+
+def _thomas(low, diag, up, d):
+    """Solve tridiagonal systems along axis 1, vectorized over axis 0 (depth) and axis 2 (RHS).
+
+    low, diag, up: [B, n]; d: [B, n, R]. Returns x: [B, n, R]. Replaces a per-depth solve_banded
+    loop with a single vectorized forward/back substitution (the loop runs over n, not over depth).
+    """
+    B, n = diag.shape
+    cp = np.empty((B, n))
+    dp = np.empty_like(d)
+    cp[:, 0] = up[:, 0] / diag[:, 0]
+    dp[:, 0, :] = d[:, 0, :] / diag[:, 0][:, None]
+    for i in range(1, n):
+        m = diag[:, i] - low[:, i] * cp[:, i - 1]
+        cp[:, i] = up[:, i] / m
+        dp[:, i, :] = (d[:, i, :] - low[:, i][:, None] * dp[:, i - 1, :]) / m[:, None]
+    x = np.empty_like(d)
+    x[:, n - 1, :] = dp[:, n - 1, :]
+    for i in range(n - 2, -1, -1):
+        x[:, i, :] = dp[:, i, :] - cp[:, i][:, None] * x[:, i + 1, :]
+    return x
+
+
 def _lateral_banded_neumann(n, r):
     """Banded (I - r D2) for a uniform 1D lateral line of n nodes with zero-flux end walls.
 
@@ -112,9 +156,13 @@ class VolumeGrid:
             # subsurface nodes (1..nz-2) conduct laterally.
             rx[0] = rx[-1] = 0.0
             ry[0] = ry[-1] = 0.0
-        self._abx = [_lateral_banded_neumann(self.nx, float(rx[k])) for k in range(self.nz)]
-        self._aby = [_lateral_banded_neumann(self.ny, float(ry[k])) for k in range(self.nz)]
-        self._lateral_off = bool(np.all(rx == 0.0) and np.all(ry == 0.0))
+        self._rx, self._ry = rx, ry
+        # Thomas diagonals for the whole depth stack (one vectorized solve per sweep).
+        self._tx = _neumann_tridiag(self.nx, rx)            # each: [nz, nx]
+        self._ty = _neumann_tridiag(self.ny, ry)            # each: [nz, ny]
+        self._x_off = bool(self.nx == 1 or np.all(rx == 0.0))
+        self._y_off = bool(self.ny == 1 or np.all(ry == 0.0))
+        self._lateral_off = bool(self._x_off and self._y_off)
 
     def set_vertical_diag_cols(self, diag_cols):
         """Supply per-column vertical operators [ncols][3, nz] (temperature-dependent case),
@@ -133,11 +181,14 @@ class VolumeGrid:
         solve_banded(diag, T + dt*source). Lateral sweeps act on T alone first.
         """
         b = np.array(T, dtype=float)                        # copy; never mutate the caller's T
-        if not self._lateral_off:
-            for k in range(self.nz):                        # x-sweep: solve along axis 0
-                b[:, :, k] = solve_banded((1, 1), self._abx[k], b[:, :, k])
-            for k in range(self.nz):                        # y-sweep: solve along axis 1
-                b[:, :, k] = solve_banded((1, 1), self._aby[k], b[:, :, k].T).T
+        if not self._x_off:                                 # x-sweep: solve along axis 0 (nx)
+            d = np.ascontiguousarray(b.transpose(2, 0, 1))  # [nz, nx, ny]
+            d = _thomas(self._tx[0], self._tx[1], self._tx[2], d)
+            b = np.ascontiguousarray(d.transpose(1, 2, 0))  # -> [nx, ny, nz]
+        if not self._y_off:                                 # y-sweep: solve along axis 1 (ny)
+            d = np.ascontiguousarray(b.transpose(2, 1, 0))  # [nz, ny, nx]
+            d = _thomas(self._ty[0], self._ty[1], self._ty[2], d)
+            b = np.ascontiguousarray(d.transpose(2, 1, 0))  # -> [nx, ny, nz]
         b = b + self.dt * source                            # source enters the vertical solve
         # z-sweep
         flat = b.reshape(self.nx * self.ny, self.nz)        # [ncols, nz], row c = column (i,j)
