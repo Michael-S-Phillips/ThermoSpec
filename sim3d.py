@@ -28,9 +28,8 @@ from grid3d import VolumeGrid, build_vertical_diag
 
 class Simulator3D:
     def __init__(self, cfg: SimulationConfig, nx, ny, dx_m, dy_m, lateral_k=None):
-        if cfg.use_RTE:
-            raise NotImplementedError("Simulator3D currently supports non-RTE conduction only.")
         self.cfg = cfg
+        self._use_rte = cfg.use_RTE
         self.base = LayerGrid(cfg)
         self.vol = VolumeGrid(self.base, nx, ny, dx_m, dy_m, lateral_k=lateral_k)
         self.nx, self.ny, self.nz = int(nx), int(ny), self.base.x_num
@@ -55,6 +54,63 @@ class Simulator3D:
         self._x0, self._x1 = g.x[0], g.x[1]
 
         self._setup_temperature_dependence()
+        self._setup_rte()
+
+    def _setup_rte(self):
+        """Set up per-column radiative transfer (DISORT, batched over all columns).
+
+        RTE in regolith is 1D per column, so all nx*ny columns are solved in one DISORT call
+        with n_cols = nx*ny (the same batching the crater model uses over facets). Currently
+        supports RTE_solver='disort', thermal_evolution_mode='two_wave', single_layer.
+        """
+        if not self._use_rte:
+            return
+        if self.cfg.RTE_solver != 'disort':
+            raise NotImplementedError(
+                "Simulator3D RTE currently supports RTE_solver='disort' "
+                "(Hapke is scalar-per-column; a per-column loop is a later addition).")
+        if self.cfg.thermal_evolution_mode != 'two_wave':
+            raise NotImplementedError(
+                "Simulator3D RTE currently supports thermal_evolution_mode='two_wave'.")
+        if not self.cfg.single_layer:
+            raise NotImplementedError("Simulator3D RTE currently supports single_layer=True.")
+        from rte_disort import DisortRTESolver
+        ncols = self.nx * self.ny
+        self._rte = DisortRTESolver(self.cfg, self.base, n_cols=ncols,
+                                    output_radiance=False, planck=True, solver_mode='two_wave')
+        self._rte_vis = DisortRTESolver(self.cfg, self.base, n_cols=ncols,
+                                        output_radiance=False, planck=False, solver_mode='two_wave')
+
+    def _rte_step(self, j):
+        """Run DISORT for all columns at this step; return the 3D source and set self.T_surf.
+
+        Mirrors the DISORT branch of modelmain.Simulator.run (two_wave): a thermal (planck)
+        solve gives the flux-divergence source and upward flux (-> brightness T_surf), and a
+        visible solve adds the absorbed-solar source when any column is sunlit.
+        """
+        ncols, nz = self.nx * self.ny, self.nz
+        mu_col = np.ascontiguousarray((self.mu_array[j] * self.mu_fac).reshape(ncols))
+        F_col = np.ascontiguousarray((self.F_array[j] * self.F_gate).reshape(ncols))
+        Tflat = np.ascontiguousarray(self.T.reshape(ncols, nz).T)          # [nz, ncols]
+
+        src_th, flup_th = self._rte.disort_run(Tflat, mu_col.copy(), F_col.copy())
+        src_th = np.asarray(src_th)                                        # [ncols, nz]
+        flup_th = np.asarray(flup_th).reshape(ncols)
+        if np.any(F_col > 0.001):
+            src_vis, _ = self._rte_vis.disort_run(Tflat, mu_col.copy(), F_col.copy())
+            src = src_th + np.asarray(src_vis)
+        else:
+            src = src_th
+        self.T_surf = (flup_th / self.cfg.sigma).reshape(self.nx, self.ny) ** 0.25
+        return src.reshape(self.nx, self.ny, nz)
+
+    def _rte_bc(self):
+        """RTE surface/bottom BC (modelmain._bc, use_RTE branch): Neumann top, then bottom."""
+        self.T[:, :, 0] = self.T[:, :, 1]
+        if self.cfg.bottom_bc == 'dirichlet':
+            self.T[:, :, -1] = self.cfg.T_bottom
+        else:
+            self.T[:, :, -1] = self.T[:, :, -2]
 
     def _setup_temperature_dependence(self):
         """Prepare per-column vertical operators when properties depend on temperature.
@@ -170,8 +226,13 @@ class Simulator3D:
         for j in range(self.t_num):
             if j > 0:
                 self._update_operators()                     # temp-dependent props (no-op if off)
-                self.T = self.vol.step(self.T, 0.0)          # non-RTE: no volumetric source
-                self._surface_bc(self.mu_array[j], self.F_array[j])
+                if self._use_rte:
+                    source = self._rte_step(j)               # per-column RTE source + T_surf
+                    self.T = self.vol.step(self.T, source)
+                    self._rte_bc()
+                else:
+                    self.T = self.vol.step(self.T, 0.0)      # non-RTE: no volumetric source
+                    self._surface_bc(self.mu_array[j], self.F_array[j])
             if record_surf:
                 surf_hist.append(self.T_surf.copy())
         if record_surf:

@@ -126,13 +126,19 @@ class VolumeGrid:
         self._build_lateral(np.asarray(Kz, dtype=float))
 
     def step(self, T, source=0.0):
-        """Advance one implicit time step. T: [nx, ny, nz]. source: scalar or [nx, ny, nz]."""
-        b = T + self.dt * source
+        """Advance one implicit time step. T: [nx, ny, nz]. source: scalar or [nx, ny, nz].
+
+        The volumetric source (e.g. the RTE flux divergence) is injected into the vertical
+        solve, so that for a laterally-uniform field the step reduces exactly to the 1D update
+        solve_banded(diag, T + dt*source). Lateral sweeps act on T alone first.
+        """
+        b = np.array(T, dtype=float)                        # copy; never mutate the caller's T
         if not self._lateral_off:
             for k in range(self.nz):                        # x-sweep: solve along axis 0
                 b[:, :, k] = solve_banded((1, 1), self._abx[k], b[:, :, k])
             for k in range(self.nz):                        # y-sweep: solve along axis 1
                 b[:, :, k] = solve_banded((1, 1), self._aby[k], b[:, :, k].T).T
+        b = b + self.dt * source                            # source enters the vertical solve
         # z-sweep
         flat = b.reshape(self.nx * self.ny, self.nz)        # [ncols, nz], row c = column (i,j)
         if self._diag_cols is None:

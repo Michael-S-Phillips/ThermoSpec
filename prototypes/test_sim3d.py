@@ -98,6 +98,54 @@ def test_matches_1d_with_temperature_dependent_k():
     assert dT < 1e-5 and dTs < 1e-5, f"temp-dependent k: dT={dT:.2e}, dTs={dTs:.2e}"
 
 
+def test_disort_rte_matches_1d_when_laterally_uniform():
+    # A laterally-uniform DISORT 3D run must reproduce the 1D DISORT Simulator column-for-column.
+    # two_wave evolution needs no optical-constant files.
+    # dt must resolve the near-surface diurnal layer: at a coarse dt (e.g. 444 s) the model is
+    # itself under-resolved and ULP-level reshape-ordering differences amplify (~0.065 K); at a
+    # valid dt (89 s here) the 3D coupling reproduces 1D to machine precision.
+    base = dict(
+        use_RTE=True, RTE_solver='disort', thermal_evolution_mode='two_wave',
+        output_radiance_mode='two_wave', single_layer=True, diurnal=True, sun=True,
+        depth_dependent_properties=False, temperature_dependent_properties=False,
+        auto_dt=False, tsteps_day=1000, ndays=1, dust_thickness=0.05, Et=1000.0,
+        geometric_spacing=True, bottom_bc='dirichlet', T_bottom=250.0,
+        latitude=0.0, dec=0.0, P=88775.0, S=1361.0, nstr=4, nmom=4,
+        ssalb_therm=0.1, ssalb_vis=0.5, eta=1.0, g_therm=0.0, g_vis=0.0, R_base=0.0,
+        k_dust=7.4e-4, rho_dust=1100.0, cp_dust=825.0)
+    sim1d = Simulator(SimulationConfig(**base))
+    sim1d.run()
+    sim3d = Simulator3D(SimulationConfig(**base), nx=2, ny=2, dx_m=0.02, dy_m=0.02)
+    sim3d.run()
+    dT = np.max(np.abs(sim3d.T - sim1d.T[None, None, :]))
+    dTs = np.max(np.abs(sim3d.T_surf - sim1d.T_surf))
+    assert dT < 1e-6 and dTs < 1e-6, f"DISORT 3D vs 1D: dT={dT:.2e}, dTs={dTs:.2e}"
+
+
+def test_disort_rte_with_lateral_conduction_shadow():
+    # Full stack: per-column DISORT RTE + 3D lateral conduction. A permanently shadowed half
+    # (F_gate=0) radiates to space and cools; lateral conduction from the lit half warms it.
+    base = dict(
+        use_RTE=True, RTE_solver='disort', thermal_evolution_mode='two_wave',
+        output_radiance_mode='two_wave', single_layer=True, diurnal=True, sun=True,
+        auto_dt=False, tsteps_day=1000, ndays=1, dust_thickness=0.05, Et=1000.0,
+        geometric_spacing=True, bottom_bc='dirichlet', T_bottom=250.0,
+        latitude=0.0, dec=0.0, P=88775.0, S=1361.0, nstr=4, nmom=4,
+        ssalb_therm=0.1, ssalb_vis=0.5, eta=1.0, g_therm=0.0, g_vis=0.0, R_base=0.0,
+        k_dust=0.02, rho_dust=1500.0, cp_dust=800.0)
+
+    def build(lateral_k):
+        s = Simulator3D(SimulationConfig(**base), nx=6, ny=1, dx_m=0.01, dy_m=0.01,
+                        lateral_k=lateral_k)
+        s.F_gate[:3, :] = 0.0
+        return s
+
+    lit = build(None); lit.run()
+    iso = build(0.0); iso.run()
+    assert lit.T_surf[:3].mean() > iso.T_surf[:3].mean() + 0.5, "lateral RTE did not warm shadow"
+    assert lit.T_surf[3:].mean() < iso.T_surf[3:].mean(), "lit side should lose heat laterally"
+
+
 def test_lateral_conduction_warms_shadowed_columns():
     # nx=6 columns; the x<3 half is permanently shadowed (F_gate=0).
     def build(lateral_k):
