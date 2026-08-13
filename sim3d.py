@@ -221,8 +221,17 @@ class Simulator3D:
         else:
             raise ValueError(f"Invalid bottom_bc: {cfg.bottom_bc}")
 
-    def run(self, record_surf=False):
+    def run(self, record_surf=False, record_phases=False):
+        """Advance the diurnal run.
+
+        record_phases: keep the full temperature field at diurnal noon and pre-dawn (the steps of
+        maximum and minimum mean surface brightness temperature) in self.T_noon / self.T_predawn,
+        for later spectra via phase_spectra().
+        """
         surf_hist = []
+        if record_phases:
+            self.T_noon = self.T_predawn = None
+            self._best_max, self._best_min = -np.inf, np.inf
         for j in range(self.t_num):
             if j > 0:
                 self._update_operators()                     # temp-dependent props (no-op if off)
@@ -235,6 +244,25 @@ class Simulator3D:
                     self._surface_bc(self.mu_array[j], self.F_array[j])
             if record_surf:
                 surf_hist.append(self.T_surf.copy())
+            if record_phases and j > 0:
+                m = float(np.mean(self.T_surf))
+                if m > self._best_max:
+                    self._best_max, self.T_noon = m, self.T.copy()
+                    self.Tsurf_noon = np.asarray(self.T_surf).copy()
+                if m < self._best_min:
+                    self._best_min, self.T_predawn = m, self.T.copy()
+                    self.Tsurf_predawn = np.asarray(self.T_surf).copy()
         if record_surf:
             self.surf_hist = np.array(surf_hist)
         return self.T, self.T_surf
+
+    def phase_spectra(self, phase='noon', observer_mu=1.0):
+        """Emergent thermal spectra (wavenumbers, radiance, per-band brightness T) for every
+        column, from the recorded noon or pre-dawn field. Requires run(record_phases=True) and
+        thermal optics in cfg (mie_file_out / wn_bounds_out). See radiance3d.compute_spectra."""
+        from radiance3d import compute_spectra
+        field = {'noon': getattr(self, 'T_noon', None),
+                 'predawn': getattr(self, 'T_predawn', None)}.get(phase)
+        if field is None:
+            raise ValueError("No recorded field; run(record_phases=True) first (phase='%s')." % phase)
+        return compute_spectra(self.cfg, self.base, field, observer_mu=observer_mu)
