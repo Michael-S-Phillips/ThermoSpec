@@ -12,7 +12,8 @@ RTE variants (Hapke, multi_wave/hybrid spectra) are follow-ons — see "Not yet"
 | file | role |
 |---|---|
 | `grid3d.py` | `VolumeGrid`: one LOD-ADI implicit conduction step over an [nx,ny,nz] field. Reuses `LayerGrid.diag` for the vertical sweep; builds conservative Neumann-wall lateral operators. Supports per-column vertical operators for temperature-dependent properties. |
-| `sim3d.py` | `Simulator3D`: diurnal driver. Non-RTE path (per-column nonlinear surface energy balance, vectorized copy of `modelmain._T_surf_calc`) and RTE path (batched DISORT over all columns, `n_cols=nx*ny`; Neumann surface BC). Bottom BC + temperature-dependent property updates in both. |
+| `sim3d.py` | `Simulator3D`: diurnal driver. Non-RTE path (per-column nonlinear surface energy balance, vectorized copy of `modelmain._T_surf_calc`) and RTE path (batched DISORT over all columns, `n_cols=nx*ny`; Neumann surface BC). Bottom BC + temperature-dependent property updates in both. `run(record_phases=True)` + `phase_spectra()` for noon/pre-dawn spectra. |
+| `radiance3d.py` | `compute_spectra`: batched per-column hybrid-thermal DISORT output solve -> emergent thermal spectrum + closed-form per-band brightness temperature. The 3D analogue of `radiance_processor` (hybrid, thermal_only). |
 | `prototypes/adi3d.py` | standalone LOD-ADI reference solver (uniform grid, constant props) + its machine-precision eigenmode tests and the wall-time benchmark. |
 | `prototypes/test_*.py` | test suites (run directly; no pytest needed). |
 | `docs/RATE_LIMITING_AND_PINN.md` | measured cost breakdown + where surrogate models pay off. |
@@ -85,8 +86,10 @@ dt the model's own near-surface response is under-resolved. Per-column RTE domin
 
 - **Hapke RTE in 3D.** `rte_hapke.compute_source` is scalar-per-column (no batching); a per-column
   loop (each column carrying its own phi_vis/phi_therm state) would add the fast Hapke core.
-- **multi_wave / hybrid evolution and emissivity spectra in 3D.** Currently `two_wave` only; the
-  spectral output path (per-column, at output times) is the natural place for a learned surrogate.
+- **multi_wave / hybrid thermal *evolution* in 3D.** Emissivity/BT *spectra* are done
+  (`radiance3d.py`, computed at output times from the converged field); driving the thermal
+  *evolution* itself in multi_wave/hybrid (rather than two_wave) is the remaining variant, and the
+  per-column spectral solve is the natural place for a learned surrogate.
 - **Lateral-sweep performance.** The per-depth `solve_banded` loop is ~90% of the conduction step and
   should be replaced by a vectorized/batched tridiagonal (or a torch-MPS batched solve).
 - **Native integration.** Currently a companion module reusing the core; a future step could fold a
