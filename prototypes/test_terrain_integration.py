@@ -57,6 +57,15 @@ def test_generated_view_factors_agree_with_file_within_method_tolerance():
     assert dT < 6.0, f"generated-VF vs file-VF crater temps differ by {dT:.3f} K"
 
 
+def test_sun_vectors_injection_reduces_to_analytic():
+    # SPICE hook: injecting a real solar direction series replaces the analytic sun. Feeding back
+    # the analytic vectors (north, east, up) must reproduce the analytic run bit-for-bit.
+    a = Simulator(_cfg()); a.run()
+    sv = np.column_stack([a.sun_x, a.sun_y, a.sun_z])   # [n_steps, 3] = (north, east, up)
+    b = Simulator(_cfg(), sun_vectors=sv); b.run()
+    assert np.max(np.abs(a.T_surf_crater_out - b.T_surf_crater_out)) < 1e-12
+
+
 def _bowl(n=15, R=7.0, depth=5.0):
     ax = np.arange(n) - (n - 1) / 2.0
     X, Y = np.meshgrid(ax, ax)

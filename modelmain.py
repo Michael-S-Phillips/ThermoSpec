@@ -29,9 +29,14 @@ class Simulator:
 	High-level simulator that ties together configuration, grid setup,
 	radiative transfer, and heat diffusion time-stepping.
 	"""
-	def __init__(self, config: SimulationConfig = None, crater_mesh=None, crater_selfheating=None):
+	def __init__(self, config: SimulationConfig = None, crater_mesh=None, crater_selfheating=None,
+	             sun_vectors=None):
 		# Initialize configuration
 		self.cfg = config or SimulationConfig()
+		# Optional real (e.g. SPICE ephemeris) solar direction series for the crater/terrain model,
+		# shape [n_steps, 3] as (north, east, up) per integration time step; overrides the analytic
+		# sun below. None -> analytic sun. See _setup_time_arrays.
+		self._sun_vectors = sun_vectors
 		# Build spatial grid and FD matrix
 		self.grid = LayerGrid(self.cfg)
 		#Initialize crater geometry files for roughness model
@@ -347,6 +352,14 @@ class Simulator:
 				self.sun_x = -np.sin(self.cfg.dec)*np.cos(self.cfg.latitude) + np.cos(self.cfg.dec)*np.cos(hour_angle)*np.sin(self.cfg.latitude)
 				self.sun_y = -np.cos(self.cfg.dec)*np.sin(hour_angle)
 				self.sun_z = mu.copy()
+				# Override with an injected real solar direction series (north, east, up) if given.
+				if self._sun_vectors is not None:
+					sv = np.asarray(self._sun_vectors, dtype=float)
+					if sv.shape != (len(self.t), 3):
+						raise ValueError(
+							"sun_vectors must have shape [%d, 3] as (north, east, up); got %s"
+							% (len(self.t), sv.shape))
+					self.sun_x, self.sun_y, self.sun_z = sv[:, 0], sv[:, 1], sv[:, 2]
 			else:
 				# Non-diurnal: fixed sun position (stored as scalars)
 				if(self.cfg.sun):
