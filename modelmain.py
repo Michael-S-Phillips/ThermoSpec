@@ -29,7 +29,7 @@ class Simulator:
 	High-level simulator that ties together configuration, grid setup,
 	radiative transfer, and heat diffusion time-stepping.
 	"""
-	def __init__(self, config: SimulationConfig = None):
+	def __init__(self, config: SimulationConfig = None, crater_mesh=None, crater_selfheating=None):
 		# Initialize configuration
 		self.cfg = config or SimulationConfig()
 		# Build spatial grid and FD matrix
@@ -37,9 +37,11 @@ class Simulator:
 		#Initialize crater geometry files for roughness model
 		if self.cfg.crater:
 			from crater import CraterMesh, SelfHeatingList, ShadowTester, CraterRadiativeTransfer
-			# File paths can be set in config or hardcoded for now
-			self.crater_mesh = CraterMesh(self.cfg.crater_mesh)
-			self.crater_selfheating = SelfHeatingList(self.cfg.crater_selfheating)
+			# Mesh + view factors may be injected directly (e.g. a DEMMesh + generated view
+			# factors for real topography); otherwise they are loaded from the config file paths.
+			self.crater_mesh = crater_mesh if crater_mesh is not None else CraterMesh(self.cfg.crater_mesh)
+			self.crater_selfheating = (crater_selfheating if crater_selfheating is not None
+			                           else SelfHeatingList(self.cfg.crater_selfheating))
 			self.crater_shadowtester = ShadowTester(self.crater_mesh)
 			self.crater_radtrans = CraterRadiativeTransfer(
 				self.crater_mesh, self.crater_selfheating)

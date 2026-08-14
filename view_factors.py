@@ -18,43 +18,74 @@ Large DEM meshes (N ~ 1e4) will want a chunked/sparse pass; deferred to the DEM-
 import numpy as np
 
 
-def compute_view_factors(mesh, occlusion=True, lift=None):
-    """Dense [N,N] view-factor matrix F[i,j] (i->j). Diagonal is 0."""
+def _point_vf_geometry(centroids, normals, areas):
+    """Dense point-to-point geometric view factors Fgeom[a,b] = cos_a cos_b A_b/(pi r^2),
+    zeroed where facets do not face each other. Reciprocal by construction (A_a Fgeom_ab =
+    A_b Fgeom_ba). No occlusion."""
+    n = len(centroids)
+    Fg = np.zeros((n, n))
+    for a in range(n):
+        D = centroids - centroids[a]
+        r = np.linalg.norm(D, axis=1)
+        r_safe = np.where(r > 0, r, 1.0)
+        U = D / r_safe[:, None]
+        cos_a = U @ normals[a]
+        cos_b = -(U * normals).sum(axis=1)
+        facing = (cos_a > 0) & (cos_b > 0) & (r > 0)
+        Fg[a] = np.where(facing, cos_a * cos_b * areas / (np.pi * r_safe**2), 0.0)
+    return Fg
+
+
+def compute_view_factors(mesh, occlusion=True, refine=False, lift=None):
+    """Dense [N,N] view-factor matrix F[i,j] (i->j), diagonal 0.
+
+    refine=True integrates over the mesh's subdivided sub-facets (mesh.sub_* + sub_face_index)
+    for accuracy when facets are closely spaced (r ~ facet size); the point approximation on raw
+    facets over-counts near-field view factors. Occlusion is evaluated at the facet level.
+    """
     normals = np.asarray(mesh.normals, float)
     centroids = np.asarray(mesh.centroids, float)
     areas = np.asarray(mesh.areas, float)
     N = len(normals)
 
-    Fgeom = np.zeros((N, N))
-    vis = np.ones((N, N), dtype=bool)          # ray visibility (True = not occluded)
+    # --- geometric view factors (point, or sub-facet integrated) ---
+    if refine:
+        sc = np.asarray(mesh.sub_centroids, float)
+        sn = np.asarray(mesh.sub_normals, float)
+        sa = np.asarray(mesh.sub_areas, float)
+        Fsub = _point_vf_geometry(sc, sn, sa)          # [Nsub, Nsub]
+        smap = mesh.sub_face_index                      # facet -> sub-facet indices
+        Fgeom = np.zeros((N, N))
+        for i in range(N):
+            ai = np.asarray(smap[i])
+            # F[i,j] = (1/A_i) sum_{a in i} A_a sum_{b in j} Fsub[a,b]
+            contrib = (sa[ai][:, None] * Fsub[ai]).sum(axis=0) / areas[i]   # per sub-facet b
+            for j in range(N):
+                Fgeom[i, j] = contrib[np.asarray(smap[j])].sum()
+        np.fill_diagonal(Fgeom, 0.0)
+    else:
+        Fgeom = _point_vf_geometry(centroids, normals, areas)
 
-    tm = None
+    # --- facet-level occlusion ---
+    vis = np.ones((N, N), dtype=bool)
     if occlusion:
         import trimesh
         tm = trimesh.Trimesh(vertices=np.asarray(mesh.vertices, float),
                              faces=np.asarray(mesh.faces), process=False)
         if lift is None:
             lift = 1e-3 * float(np.median(tm.edges_unique_length))
-
-    for i in range(N):
-        D = centroids - centroids[i]           # [N,3]  c_j - c_i
-        r = np.linalg.norm(D, axis=1)          # [N]
-        r_safe = np.where(r > 0, r, 1.0)
-        U = D / r_safe[:, None]                # unit i->j
-        cos_i = U @ normals[i]                 # n_i . u_ij
-        cos_j = -(U * normals).sum(axis=1)     # n_j . (-u_ij)
-        facing = (cos_i > 0) & (cos_j > 0) & (r > 0)
-        Fgeom[i] = np.where(facing, cos_i * cos_j * areas / (np.pi * r_safe**2), 0.0)
-
-        if occlusion and facing.any():
-            js = np.where(facing)[0]
+        D = centroids[None, :, :] - centroids[:, None, :]
+        r = np.linalg.norm(D, axis=2)
+        for i in range(N):
+            js = np.where(Fgeom[i] > 0)[0]
+            if len(js) == 0:
+                continue
+            dirs = D[i, js] / r[i, js][:, None]
             origins = np.repeat((centroids[i] + lift * normals[i])[None, :], len(js), axis=0)
-            first_hit = tm.ray.intersects_first(origins, U[js])
-            occluded = first_hit != js         # blocked (or missed -> conservative)
-            vis[i, js[occluded]] = False
+            first_hit = tm.ray.intersects_first(origins, dirs)
+            vis[i, js[first_hit != js]] = False
 
-    # Symmetric visibility -> exact reciprocity (Fgeom is reciprocal by construction).
-    F = Fgeom * (vis & vis.T)
+    F = Fgeom * (vis & vis.T)                            # symmetric mask -> exact reciprocity
     np.fill_diagonal(F, 0.0)
     return F
 
@@ -76,3 +107,24 @@ def view_factor_matrix_from_file(fname, N):
     """Load a sparse view-factor file back into a dense [N,N] matrix (via SelfHeatingList)."""
     from crater import SelfHeatingList
     return SelfHeatingList(fname).as_view_matrix(N)
+
+
+class ViewFactorList:
+    """SelfHeatingList-compatible view of a dense view-factor matrix, for injecting generated
+    view factors straight into the crater engine (CraterRadiativeTransfer) without a temp file.
+    Duck-types crater.SelfHeatingList: exposes `indices`, `view_factors`, and `as_view_matrix`."""
+
+    def __init__(self, F, threshold=1e-8):
+        F = np.asarray(F, float)
+        self._F = F
+        N = F.shape[0]
+        idx, vfs = [], []
+        for i in range(N):
+            js = np.where(F[i] > threshold)[0]
+            idx.append(js)
+            vfs.append(F[i, js])
+        self.indices = np.array(idx, dtype=object)
+        self.view_factors = np.array(vfs, dtype=object)
+
+    def as_view_matrix(self, N):
+        return self._F
