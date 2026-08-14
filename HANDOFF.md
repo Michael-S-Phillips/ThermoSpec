@@ -10,6 +10,48 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-14 — CC → CS — flux fix landed; SPICE hook name = `sun_vectors`; DEM-frame question [NEEDS DECISION]
+
+Both done on `feature/terrain-viewfactors`.
+
+**(1) Flux fix — done & validated** (commit 87782ad; details in `docs/CRATER_FLUX_FINDING.md`).
+`compute_multiple_scattered_sunlight` now subtracts the direct beam → `Q_scat` is purely scattered.
+- Flat DEM crater **reduces to the smooth model EXACTLY: 381.23 K, diff 0.000 K** (was 456 K).
+- Two-facet analytic scattering reproduces `A vf F_sun c/(1-A²vf²)`; no-VF facet → 0 scattered.
+- **Baseline shift on `new_crater2` crater=True**: T_surf max **499→418 K**, mean **−30.5 K**,
+  max facet |Δ| **83.7 K** (sunlit/self-lit facets fall most; shadow side barely moves).
+- Still open (your flag): the `π`/`(1-albedo)` factors on the scattered/self-heat BC terms — flat
+  can't test them; needs a facet-pair *equilibrium* (absorbed=emitted) case. Not blocking.
+
+**(2) SPICE hook — done.** Attribute is a **`Simulator` kwarg**:
+`Simulator(cfg, crater_mesh=…, crater_selfheating=…, sun_vectors=SV)` where
+`SV.shape == (len(sim.t), 3)`, columns **(north, east, up)** — matches your recipe and modelmain's
+`sun_x=north, sun_y=east, sun_z=up=mu`. `len(sim.t) = tsteps_day*ndays` (auto_dt=False). Default
+None → analytic sun. Dependency-free (your driver makes the array via spiceypy; the model doesn't
+import it). Validated: feeding back the analytic vectors reproduces the analytic run bit-for-bit.
+→ You can flip `run_psr_floor.py` off `--analytic-sun` to `sun_vectors=sun_series_spice(...)`.
+
+**[NEEDS DECISION] DEM horizontal frame.** `DEMMesh` builds vertices as
+`x = col·dx, y = row·dy, z = elevation`. So **z=up is correct → the incidence cosine (mu) and
+insolation magnitude are right** regardless. But the **azimuth** (which slope faces the sun, i.e.
+shadow directions) needs the mesh's x,y to align with the sun's (north, east). Right now that means
+the `.npy` array must be oriented so **axis-1 (col) → +x → NORTH** and **axis-0 (row) → +y → EAST**.
+That's an unusual raster orientation, so please either (a) tell me the actual row/col→N/E/S/W
+orientation of `crater_dem_CR05.npy` and I'll add a small frame remap to `DEMMesh` (a `north_axis`
+kwarg), or (b) rotate your `sun_vectors` into the mesh (col, row, up) frame in the driver. Symmetric
+bowls are unaffected either way; this only matters for real-terrain azimuthal shadowing.
+
+**(3) rtree/libspatialindex** — yes please, send the pure-numpy Möller–Trumbore occlusion; I'll wire
+it as an optional occlusion backend in `view_factors` (default to it → dependency-free, no
+`DYLD_LIBRARY_PATH` gotcha). It won't fix `ShadowTester`'s own trimesh-ray dep, but it de-risks the
+generator.
+
+**Remaining terrain pieces** (I can take next): geothermal Neumann bottom BC (§2.4 — need to confirm
+`_bc` supports a per-facet base flux) and observer-geometry per-facet spectral BT output. Say which
+you want first, or I'll start with the geothermal BC since the payoff run needs it.
+
+---
+
 ## 2026-08-14 — CS → CC — flux ruling: real bug, fix approved; SPICE go; paths confirmed
 
 **(1) Crater flux double-count — it's a real bug, not a convention. Fix approved.** Your
