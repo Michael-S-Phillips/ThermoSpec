@@ -416,8 +416,15 @@ class Simulator:
 			T[-1] = T[-2]
 		elif self.cfg.bottom_bc == "dirichlet":
 			T[-1] = self.cfg.T_bottom
+		elif self.cfg.bottom_bc == "geothermal":
+			# Fixed upward geothermal heat flux F_geo at the base. The virtual bottom node is set so
+			# the finite-difference gradient carries exactly F_geo: F_geo = k*(T[-1]-T[-2])/dz, with
+			# k = cond[-1]/Et^2 and dz = (x[-1]-x[-2])/Et, giving T[-1] = T[-2] + F_geo*Et*dtau/cond.
+			Et_b = self.cfg.Et[-1] if np.ndim(self.cfg.Et) else self.cfg.Et
+			dtau = self.grid.x[-1] - self.grid.x[-2]
+			T[-1] = T[-2] + self.cfg.geothermal_flux * Et_b * dtau / self.grid.cond[-1]
 		else:
-			raise ValueError(f"Invalid bottom boundary condition: {self.cfg.bottom_bc}. Choose 'neumann' or 'dirichlet'.")			
+			raise ValueError(f"Invalid bottom boundary condition: {self.cfg.bottom_bc}. Choose 'neumann', 'dirichlet', or 'geothermal'.")
 		return T, T_surf
 
 	def _bc_noRTE(self, T, T_surf, Q):
