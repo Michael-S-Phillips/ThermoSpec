@@ -36,7 +36,39 @@ def _point_vf_geometry(centroids, normals, areas):
     return Fg
 
 
-def compute_view_factors(mesh, occlusion=True, refine=False, lift=None):
+def _occluded_pairs_numpy(vertices, faces, centroids, normals, src, dst, lift_frac=1e-3, eps=1e-6):
+    """Pure-numpy Moller-Trumbore occlusion: blocked[k] for each pair (src[k]->dst[k]), True if a
+    third facet's triangle intersects the segment strictly between the two centroids. Dependency-
+    free alternative to the trimesh ray index (rtree/libspatialindex). Contributed by the analysis
+    session (claude_session_sync/scripts/numpy_occlusion.py); vendored here so the generator has no
+    ray-engine dependency."""
+    tris = vertices[faces]                                    # (N,3,3)
+    v0 = tris[:, 0, :]; e1 = tris[:, 1, :] - v0; e2 = tris[:, 2, :] - v0
+    med_edge = np.median(np.linalg.norm(np.diff(tris[:, [0, 1, 2, 0], :], axis=1), axis=2))
+    lift = lift_frac * med_edge
+    origins = centroids[src] + lift * normals[src]
+    seg = centroids[dst] - origins
+    seglen = np.linalg.norm(seg, axis=1)
+    dirs = seg / seglen[:, None]
+    blocked = np.zeros(len(src), dtype=bool)
+    for k in range(len(src)):
+        o, d, L = origins[k], dirs[k], seglen[k]
+        p = np.cross(d, e2)
+        det = np.einsum('ij,ij->i', e1, p)
+        ok = np.abs(det) > eps
+        inv = np.zeros(len(faces)); inv[ok] = 1.0 / det[ok]
+        t0 = o - v0
+        u = np.einsum('ij,ij->i', t0, p) * inv
+        q = np.cross(t0, e1)
+        v = np.einsum('j,ij->i', d, q) * inv
+        t = np.einsum('ij,ij->i', e2, q) * inv
+        hit = ok & (u >= -eps) & (v >= -eps) & (u + v <= 1 + eps) & (t > eps) & (t < L - 1e-3)
+        hit[src[k]] = False; hit[dst[k]] = False
+        blocked[k] = hit.any()
+    return blocked
+
+
+def compute_view_factors(mesh, occlusion=True, refine=False, lift=None, occlusion_backend='numpy'):
     """Dense [N,N] view-factor matrix F[i,j] (i->j), diagonal 0.
 
     refine=True integrates over the mesh's subdivided sub-facets (mesh.sub_* + sub_face_index)
@@ -69,21 +101,29 @@ def compute_view_factors(mesh, occlusion=True, refine=False, lift=None):
     # --- facet-level occlusion ---
     vis = np.ones((N, N), dtype=bool)
     if occlusion:
-        import trimesh
-        tm = trimesh.Trimesh(vertices=np.asarray(mesh.vertices, float),
-                             faces=np.asarray(mesh.faces), process=False)
-        if lift is None:
-            lift = 1e-3 * float(np.median(tm.edges_unique_length))
-        D = centroids[None, :, :] - centroids[:, None, :]
-        r = np.linalg.norm(D, axis=2)
-        for i in range(N):
-            js = np.where(Fgeom[i] > 0)[0]
-            if len(js) == 0:
-                continue
-            dirs = D[i, js] / r[i, js][:, None]
-            origins = np.repeat((centroids[i] + lift * normals[i])[None, :], len(js), axis=0)
-            first_hit = tm.ray.intersects_first(origins, dirs)
-            vis[i, js[first_hit != js]] = False
+        verts = np.asarray(mesh.vertices, float)
+        faces = np.asarray(mesh.faces)
+        if occlusion_backend == 'numpy':
+            src, dst = np.nonzero(Fgeom)                 # only facing pairs need testing
+            blk = _occluded_pairs_numpy(verts, faces, centroids, normals, src, dst,
+                                        lift_frac=(1e-3 if lift is None else lift))
+            vis[src[blk], dst[blk]] = False
+        elif occlusion_backend == 'trimesh':
+            import trimesh
+            tm = trimesh.Trimesh(vertices=verts, faces=faces, process=False)
+            lft = 1e-3 * float(np.median(tm.edges_unique_length)) if lift is None else lift
+            D = centroids[None, :, :] - centroids[:, None, :]
+            r = np.linalg.norm(D, axis=2)
+            for i in range(N):
+                js = np.where(Fgeom[i] > 0)[0]
+                if len(js) == 0:
+                    continue
+                dirs = D[i, js] / r[i, js][:, None]
+                origins = np.repeat((centroids[i] + lft * normals[i])[None, :], len(js), axis=0)
+                first_hit = tm.ray.intersects_first(origins, dirs)
+                vis[i, js[first_hit != js]] = False
+        else:
+            raise ValueError(f"Unknown occlusion_backend: {occlusion_backend!r} (use 'numpy' or 'trimesh')")
 
     F = Fgeom * (vis & vis.T)                            # symmetric mask -> exact reciprocity
     np.fill_diagonal(F, 0.0)

@@ -67,6 +67,14 @@ def test_reproduces_new_crater2_row_sums():
         f"row-sum mismatch {np.max(np.abs(F.sum(1)-ref.sum(1))):.3f}"
 
 
+def test_numpy_and_trimesh_occlusion_backends_agree():
+    # the default numpy Moller-Trumbore backend must match the trimesh ray backend exactly
+    m = CraterMesh(CRATER)
+    Fn = compute_view_factors(m, occlusion=True, occlusion_backend='numpy')
+    Ft = compute_view_factors(m, occlusion=True, occlusion_backend='trimesh')
+    assert np.max(np.abs(Fn - Ft)) < 1e-12
+
+
 def test_write_reload_roundtrip(tmp_path=None):
     m = CraterMesh(CRATER)
     F = compute_view_factors(m, occlusion=True)
