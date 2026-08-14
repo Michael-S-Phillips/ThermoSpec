@@ -42,28 +42,49 @@ class TerrainObserver:
         self.n_facets = len(mesh.normals)
         self.mu_obs, self.occlusion, self.visible = facet_view_geometry(mesh, self.observer_vec)
         self.mu_grid = np.linspace(0.05, 1.0, 12) if mu_grid is None else np.asarray(mu_grid, float)
-        self._solver = DisortRTESolver(cfg, base_grid, n_cols=self.n_facets, output_radiance=True,
-                                       planck=True, observer_mu=self.mu_grid, solver_mode='hybrid',
-                                       spectral_component='thermal_only')
-        self.wavenumbers = np.asarray(self._solver.wavenumbers, float)       # cm^-1
+
+        # Solve ONLY the observer-visible facets (skip the NaN ones) -- the DISORT output solve is
+        # the dominant cost, so this scales it with the visible count, not the total facet count.
+        self._vis_idx = np.where(self.visible)[0]
+        nvis = len(self._vis_idx)
+        self._pad = nvis == 1                                # DISORT's n_cols=1 path is unsupported
+        ncols = 2 if self._pad else nvis
+        self._solver = None
+        if ncols >= 2:
+            self._solver = DisortRTESolver(cfg, base_grid, n_cols=ncols, output_radiance=True,
+                                           planck=True, observer_mu=self.mu_grid, solver_mode='hybrid',
+                                           spectral_component='thermal_only')
+            self.wavenumbers = np.asarray(self._solver.wavenumbers, float)   # cm^-1
+        else:
+            # nothing visible; still need the band grid for output shapes
+            probe = DisortRTESolver(cfg, base_grid, n_cols=2, output_radiance=True, planck=True,
+                                    observer_mu=self.mu_grid, solver_mode='hybrid',
+                                    spectral_component='thermal_only')
+            self.wavenumbers = np.asarray(probe.wavenumbers, float)
+            self._lo = np.asarray(probe.lower_wns, float)
+            self._hi = np.asarray(probe.upper_wns, float)
         self.wavelengths_um = 1.0e4 / self.wavenumbers
-        self._lo = np.asarray(self._solver.lower_wns, float)
-        self._hi = np.asarray(self._solver.upper_wns, float)
+        if self._solver is not None:
+            self._lo = np.asarray(self._solver.lower_wns, float)
+            self._hi = np.asarray(self._solver.upper_wns, float)
 
     def brightness_temperature(self, T_facets):
         """Single time: T_facets [nz, n_facets] -> (radiance, BT) each [n_facets, n_bands],
         NaN on facets not visible to the observer."""
-        T_facets = np.ascontiguousarray(np.asarray(T_facets, float))
-        rad, _ = self._solver.disort_run(T_facets, 0.0, 0.0)
-        rad = np.asarray(rad)[:, :, 0, :]                    # [nwave, ncols, n_mu] (phi=0, all mu)
         nb = len(self.wavenumbers)
         radiance = np.full((self.n_facets, nb), np.nan)
-        for f in np.where(self.visible)[0]:
+        BT = np.full((self.n_facets, nb), np.nan)
+        if self._solver is None:
+            return radiance, BT
+        T = np.ascontiguousarray(np.asarray(T_facets, float)[:, self._vis_idx])   # visible only
+        if self._pad:
+            T = np.repeat(T, 2, axis=1)                                            # [nz,2]
+        rad, _ = self._solver.disort_run(T, 0.0, 0.0)
+        rad = np.asarray(rad)[:, :, 0, :]                    # [nwave, ncols, n_mu] (phi=0, all mu)
+        for c, f in enumerate(self._vis_idx):
             k = int(np.clip(np.searchsorted(self.mu_grid, self.mu_obs[f]), 1, len(self.mu_grid) - 1))
             w = (self.mu_obs[f] - self.mu_grid[k - 1]) / (self.mu_grid[k] - self.mu_grid[k - 1])
-            radiance[f] = rad[:, f, k - 1] * (1.0 - w) + rad[:, f, k] * w
-        BT = np.full((self.n_facets, nb), np.nan)
-        for f in np.where(self.visible)[0]:
+            radiance[f] = rad[:, c, k - 1] * (1.0 - w) + rad[:, c, k] * w
             BT[f] = band_brightness_temperature(self._lo, self._hi, radiance[f])
         return radiance, BT
 
