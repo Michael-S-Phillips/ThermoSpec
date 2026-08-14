@@ -550,6 +550,25 @@ class Simulator:
 			Tout[:, i] = solve_banded((1, 1), ab, b)
 		return Tout
 	
+	def _assert_crater_finite(self, step, tmax=1500.0):
+		"""Fail fast on crater/terrain facet thermal instability before it floods DISORT with
+		millions of temper-range warnings and then NaN-crashes the conduction solve. The
+		surface-radiative BC is dt-limited by the warmest (sunlit) facet, so an over-large dt
+		diverges a rim/wall facet; raise a clear one-line error naming the facet and step."""
+		T = self.T_crater
+		finite = np.isfinite(T)
+		ok = finite.all(axis=0) & (np.nanmin(np.where(finite, T, np.nan), axis=0) >= 0.0) \
+			& (np.nanmax(np.where(finite, T, np.nan), axis=0) <= tmax)
+		if ok.all():
+			return
+		bad = int(np.argmin(ok.astype(int)))
+		Tf = T[:, bad]
+		raise RuntimeError(
+			"Crater/terrain thermal instability at step %d: facet %d temperature out of range "
+			"(min %.4g K, max %.4g K, all-finite=%s). The surface-radiative boundary condition is "
+			"dt-limited by the warmest sunlit facet, not the cold floor -- reduce dt (increase "
+			"tsteps_day)." % (step, bad, np.nanmin(Tf), np.nanmax(Tf), bool(np.isfinite(Tf).all())))
+
 	def _calculate_absorbed_solar_energy(self, dt: float) -> float:
 		"""
 		Calculate absorbed solar energy for current time step.
@@ -935,6 +954,9 @@ class Simulator:
 					# Store albedo and emissivity as instance variables for observer radiance calculations
 					self.flux_up_therm = np.full(self.n_facets,self.crater_emissivity*self.cfg.sigma*self.T[0]**4.)
 				if j > 0:
+					# Fail fast on facet thermal instability (before DISORT floods temper-range
+					# warnings and the conduction solve NaN-crashes).
+					self._assert_crater_finite(j)
 					#sun vector (pointing towards sun)
 					if not self.cfg.diurnal:
 						# Use steady scalar values
