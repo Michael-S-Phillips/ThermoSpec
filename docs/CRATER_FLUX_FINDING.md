@@ -40,7 +40,39 @@ incident solar" source — but then reconcile the `π` and the `(1-albedo)` vs `
 `(1-albedo)`. The clean flat-DEM case (must give 388 K) and a two-facet analytic scattering case
 are good regression targets for whichever convention is chosen.
 
-## Not changed here
-The new terrain code feeds the engine correctly and is validated independently (exact view-factor
-reciprocity + closed-enclosure closure; flat-DEM facets identical to round-off; injection hook
-bit-transparent). This note is a hand-off, not a fix.
+## RESOLUTION (2026-08-14, fix approved by CS and applied)
+`compute_multiple_scattered_sunlight` now subtracts the direct beam (`F_sun*illum*cos`) before
+returning, so `Q_scat` is the **purely-scattered** increment. The BC's separate `Q_dir` is the
+only direct-beam term.
+
+**Validation (all green):**
+- **Flat DEM reduces to the smooth model EXACTLY:** crater flat `T_surf_crater` max = smooth
+  (non-crater) flat `T_surf` max = **381.23 K, difference 0.000 K** (both are the diurnal peak;
+  381 < 388 because thermal inertia lowers the peak below the inertia-free instantaneous
+  equilibrium). Before the fix the crater flat was 456 K. (`test_terrain_integration.py::
+  test_flat_dem_crater_reduces_to_smooth_model`)
+- **Two-facet analytic scattering** reproduces `A vf F_sun c/(1-A^2 vf^2)` for the scattered term
+  (confirms the scattered physics survives the subtraction), and a no-view-factor facet gets
+  exactly zero scattered light. (`test_crater_scattering.py`)
+
+**Baseline shift on the hemispherical `new_crater2` crater=True run** (dt=44 s, equatorial diurnal,
+non-RTE, albedo 0.1, em 0.95):
+
+| quantity | before fix | after fix |
+|---|---|---|
+| T_surf min | 185.77 K | 185.67 K |
+| T_surf max | 499.43 K | 418.34 K |
+| T_surf mean | 291.32 K | 260.82 K |
+
+Per-facet shift: mean **−30.5 K**, max |Δ| **83.7 K** (the most strongly self-illuminated /
+sunlit-tilted facets fall most; shadow-side facets barely move). Any prior published `crater=True`
+lit-facet results shift by this magnitude.
+
+**Still open (CS-flagged, does not block the fix):** the `π` and `(1-albedo)` factors in the BC
+assembly `Q_dir + Q_scat*(1-A)*π + Q_selfheat*em*π`. The flat case cannot test these (they multiply
+zero terms). A facet-pair case with a known analytic *equilibrium* (absorbed = emitted) is the way
+to confirm the scattered/self-heat radiometry; deferred as a follow-up.
+
+## New terrain code (unchanged, validated independently)
+View-factor reciprocity + closed-enclosure closure; flat-DEM facets identical to round-off;
+injection hook bit-transparent. The fix above is in the pre-existing engine, not the terrain code.

@@ -267,10 +267,17 @@ def compute_multiple_scattered_sunlight(
             break
         G = G_new
     F_SCAT = G.copy()
-    if(Alb.shape[1]==F_SCAT.shape[1]): 
+    # G/Alb is the TOTAL incident solar on each facet (direct beam + inter-facet scattered).
+    # Subtract the direct beam (F_sun*illum*cos) so this returns the purely-SCATTERED increment;
+    # the surface BC adds the absorbed direct beam separately (Q_dir), so returning the total here
+    # double-counted the direct beam on illuminated facets (see docs/CRATER_FLUX_FINDING.md).
+    direct = F_sun * illum_frac * sun_cosines
+    if(Alb.shape[1]==F_SCAT.shape[1]):
         F_SCAT[Alb>0.0] /= Alb[Alb>0.0]
+        F_SCAT[Alb>0.0] -= direct[Alb>0.0]
     else:
         F_SCAT /= Alb
+        F_SCAT -= direct
     return F_SCAT
 
 def compute_multiple_scattered_sunlight_gs(

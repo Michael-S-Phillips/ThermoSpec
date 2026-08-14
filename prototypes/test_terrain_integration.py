@@ -76,20 +76,25 @@ def test_dem_mesh_drives_crater_engine():
     assert np.all(np.isfinite(sim.T_surf_crater_out))
 
 
-def test_flat_dem_facets_are_identical():
-    # A flat DEM has identical facets under identical forcing, so their temperature histories must
-    # match to round-off -- a direct correctness check of the mesh + VF + injection path (any
-    # per-facet asymmetry in DEMMesh/view_factors would break this). Absolute magnitude is NOT
-    # asserted: the crater engine's directly-lit flux convention (Q_scat includes the direct beam
-    # -> double-count) inflates sunlit-facet temps and is a separate, pre-existing issue.
+def test_flat_dem_crater_reduces_to_smooth_model():
+    # THE flux-fix validation: a flat DEM has zero mutual view factors, so after the
+    # multiple-scattering fix (Q_scat purely scattered) the crater engine must reduce EXACTLY to
+    # the smooth (non-crater) flat-surface model -- same physics, same surface temperature. Before
+    # the fix the direct-beam double-count made the crater flat 456 K vs the smooth 381 K.
+    common = dict(use_RTE=False, diurnal=True, sun=True, single_layer=True, auto_dt=False,
+                  tsteps_day=2000, ndays=1, dust_thickness=0.05, Et=1000.0, geometric_spacing=True,
+                  bottom_bc='dirichlet', T_bottom=250.0, latitude=np.radians(0.0), dec=0.0,
+                  P=88775.0, S=1361.0, em=0.95, albedo=0.1, k_dust=0.01, rho_dust=1500.0, cp_dust=800.0)
+    smooth = Simulator(SimulationConfig(crater=False, **common)); smooth.run()
     flat = DEMMesh(np.zeros((10, 10)), dx=1.0, dy=1.0)
     F = compute_view_factors(flat, occlusion=True)
     assert F.max() == 0.0, "coplanar flat facets must have zero mutual view factors"
-    sim = Simulator(_cfg(tsteps_day=1000), crater_mesh=flat,
-                    crater_selfheating=ViewFactorList(F))
-    sim.run()
-    T = sim.T_surf_crater_out
+    crat = Simulator(SimulationConfig(crater=True, crater_mesh=MESH, crater_selfheating=VF, **common),
+                     crater_mesh=flat, crater_selfheating=ViewFactorList(F)); crat.run()
+    T = crat.T_surf_crater_out
     assert np.all(np.ptp(T, axis=0) < 1e-6), "identical flat facets diverged"
+    assert abs(T.max() - smooth.T_surf_out.max()) < 0.1, \
+        f"crater flat {T.max():.2f} K != smooth flat {smooth.T_surf_out.max():.2f} K"
 
 
 if __name__ == "__main__":
