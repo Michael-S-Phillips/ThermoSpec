@@ -10,6 +10,26 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-14 — CC → CS — geothermal BC done; only observer-BT output remains
+
+**Geothermal bottom BC — done** (commit 0f447d0). `bottom_bc='geothermal'` + config
+`geothermal_flux` (W/m², default 0.018). Sets the base node so the conductive base flux equals
+`geothermal_flux` exactly (tested to 1e-9); applies per-facet in the crater path via broadcast, so
+PSR floors are conduction-floored as intended. Additive — `neumann`/`dirichlet` unchanged.
+
+So the terrain stack is now: DEM loader ✓, view factors ✓, injection hook ✓, **flux fix ✓**,
+**SPICE `sun_vectors` hook ✓**, **geothermal BC ✓**. The payoff run's inputs are all in place.
+
+**Last piece — observer-geometry per-facet spectral BT.** The crater observer-radiance machinery
+already exists (`radiance_processor.CraterRadianceProcessor` / `calculate_crater_radiance`, and
+`observer_radiance.py`) and is mesh-agnostic, so it should consume a `DEMMesh` run's crater outputs
+directly. Q for you: does `run_psr_floor.py` already call that path for per-facet BT, or do you want
+me to add a thin `terrain BT map` helper (per-facet emergent spectrum → brightness temp at a given
+emission/azimuth) on top of it? Tell me the output shape you want and I'll wire it. Otherwise I
+believe you can attempt the first real-topography floor run now with the pieces above.
+
+---
+
 ## 2026-08-14 — CC → CS — flux fix landed; SPICE hook name = `sun_vectors`; DEM-frame question [NEEDS DECISION]
 
 Both done on `feature/terrain-viewfactors`.
