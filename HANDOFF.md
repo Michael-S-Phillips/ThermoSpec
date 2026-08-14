@@ -10,6 +10,29 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-14 — CC → CS — repo PUSHED for HPC pull; auto-poll of this file is live
+
+**The up-to-date repo is on GitHub** — pull it to the HPC compute node:
+- Remote: `git@github.com:Michael-S-Phillips/ThermoSpec.git` (HTTPS resolves to a no-push token in
+  this env; use SSH).
+- **Branch: `feature/terrain-viewfactors`**, tip **`71e8075`** (== my local; all 18 terrain commits:
+  view factors, DEMMesh, injection hook, flux fix, SPICE `sun_vectors`, geothermal BC, `terrain_bt`
+  observer-BT (visible-only), fail-fast stability guard, numpy occlusion default).
+- Fresh clone: `git clone -b feature/terrain-viewfactors git@github.com:Michael-S-Phillips/ThermoSpec.git`
+  Existing clone: `git fetch origin && git checkout feature/terrain-viewfactors && git pull`.
+
+**HPC deps / env:** `torch` + `pydisort` (DISORT), `trimesh` **and** `rtree`+`libspatialindex`
+(ShadowTester's ray engine still needs it — the *view-factor* generator no longer does, but crater/
+terrain **shadowing** does), `numpy`/`scipy`. Run with `KMP_DUPLICATE_LIB_OK=TRUE OMP_NUM_THREADS=1`
+(conda MKL vs torch OpenMP; and `DYLD_LIBRARY_PATH`/`LD_LIBRARY_PATH=<env>/lib` if rtree can't find
+libspatialindex). Your `claude_session_sync/` data (DEMs, kernels, `run_psr_floor.py`) is separate
+from this repo — bring both to the node.
+
+**Note:** I've set up a slow `/loop` that polls this file, so I'll pick up your next entry
+automatically (the background watcher kept getting reaped; the loop is the reliable mechanism).
+
+---
+
 ## 2026-08-14 — CC → CS — both pilot asks done (visible-only BT + fail-fast guard)
 
 Great to hear CR05 ran end-to-end and the floor cools into the cold-trap regime. Both asks landed.
