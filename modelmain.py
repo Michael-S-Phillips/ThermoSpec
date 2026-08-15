@@ -68,6 +68,7 @@ class Simulator:
 				self._setup_spectral_flux_solvers({self.cfg.thermal_evolution_mode})
 				self._setup_crater_thermal_evolution_solvers() 
 		# Precompute time arrays and insolation flags
+		self._hist_out_start = 0.0     # output-window start; _setup_time_arrays overrides for diurnal
 		self._setup_time_arrays()
 		# Initialize diurnal convergence checking
 		self._setup_convergence_checker()
@@ -99,6 +100,7 @@ class Simulator:
 		self.phi_therm_history = []
 		self.T_surf_history = []
 		self.t_history = []
+		self._hist_step_idx = []       # step index j kept in the histories (for history_stride mu-alignment)
 
 		if self.cfg.use_RTE and self.cfg.RTE_solver=='hapke':
 			self.phi_therm_prev = np.zeros(self.grid.nlay_dust+1)
@@ -325,11 +327,21 @@ class Simulator:
 				# Output points for all days
 				out_start = 0
 				out_end = self.cfg.ndays * P
-			
+			self._hist_out_start = out_start
+
 			# Create output time points at exact intervals
 			points_per_day = self.cfg.freq_out
-			self.t_out = np.linspace(out_start, out_end, 
+			self.t_out = np.linspace(out_start, out_end,
 									points_per_day * (1 if self.cfg.last_day else self.cfg.ndays))
+
+			# history_stride: steps before the output window (spin-up days that last_day discards)
+			# are stored only every Nth; the output window itself is always kept at full
+			# resolution. The window must stay dense because sharp shadow-transition facets (rim /
+			# bowl edges flipping in/out of shadow within a step or two) alias badly under a coarse
+			# grid -- thinning the window was measured to overshoot ~50 K on those facets via the
+			# cubic interpolation, so it is deliberately not thinned. Net saving is up to ndays-fold
+			# for last_day runs (all pre-output cycles collapse). When last_day=False the whole run
+			# is the output window, so history_stride is a no-op (as it must be for full output).
 			
 			# Solar angles for integration timesteps
 			hour_angle = (np.pi / (P / 2)) * (self.t - (P / 2))
@@ -735,6 +747,22 @@ class Simulator:
 		return False  # Continue simulation
 
 
+	def _store_history(self):
+		"""Whether the current step's state is kept in the interpolation history.
+
+		history_stride>1 stores only every Nth step to bound peak memory (the histories, esp.
+		T_crater [n_depth, n_facets] per step, otherwise scale with tsteps_day*ndays). The output
+		window (self._hist_out_start onward) and the final step are always kept so the cubic
+		interpolation onto the output times is unaffected. Default stride 1 stores every step."""
+		s = int(getattr(self.cfg, 'history_stride', 1) or 1)
+		if s <= 1:
+			return True
+		if self.current_time >= self._hist_out_start:
+			return True                                    # output window: always full resolution
+		if self.current_step == 0:
+			return True                                    # interpolation lower end-point
+		return self.current_step % s == 0                  # pre-output (spin-up) steps: thinned
+
 	def _make_thermal_outputs(self):
 		"""Interpolate thermal integration results to desired output times."""
 		from scipy.interpolate import interp1d
@@ -781,7 +809,11 @@ class Simulator:
 										bounds_error=True, assume_sorted=True)
 				T_surf_interp = interp1d(t_hist, T_surf_hist, kind='cubic',
 									bounds_error=True, assume_sorted=True)
-				mu_interp = interp1d(t_hist, self.mu_array, kind='linear',
+				# mu_array holds every step; subsample it to the steps actually kept in the
+				# history so it stays aligned with t_hist when history_stride>1 (default: all steps).
+				mu_hist = (self.mu_array[np.asarray(self._hist_step_idx, dtype=int)]
+						   if self._hist_step_idx else self.mu_array)
+				mu_interp = interp1d(t_hist, mu_hist, kind='linear',
 									bounds_error=True, assume_sorted=True)
 				# Interpolate to clipped output times
 				self.T_out = T_interp(t_out_clipped)
@@ -916,13 +948,18 @@ class Simulator:
 				self.T, self.T_surf = self._bc(self.T, self.T_surf)
 
 
-			# Store current state for interpolation
-			self.T_history.append(self.T.copy())
-			self.T_surf_history.append(self.T_surf)
-			self.t_history.append(self.current_time)
-			if(self.cfg.use_RTE and self.cfg.RTE_solver=='hapke'):
-				self.phi_vis_history.append(self.phi_vis_prev.copy())
-				self.phi_therm_history.append(self.phi_therm_prev.copy())
+			# Store current state for interpolation (subject to history_stride; the crater block
+			# below gates its own append on the same _store_history() decision, keeping the
+			# histories and mu_array index-aligned).
+			self._keep_history = self._store_history()
+			if self._keep_history:
+				self.T_history.append(self.T.copy())
+				self.T_surf_history.append(self.T_surf)
+				self.t_history.append(self.current_time)
+				self._hist_step_idx.append(self.current_step)
+				if(self.cfg.use_RTE and self.cfg.RTE_solver=='hapke'):
+					self.phi_vis_history.append(self.phi_vis_prev.copy())
+					self.phi_therm_history.append(self.phi_therm_prev.copy())
 
 			#Run the rough surface model, if activated. 
 			if self.cfg.crater:
@@ -1063,8 +1100,9 @@ class Simulator:
 					else:
 						#Non-RTE model, calculate upwards thermal emission for self-heating in next time step. 
 						self.flux_therm_crater = self.crater_emissivity*self.cfg.sigma*self.T_surf_crater**4.
-				self.T_crater_history.append(self.T_crater.copy())
-				self.T_surf_crater_history.append(self.T_surf_crater.copy())
+				if self._keep_history:
+					self.T_crater_history.append(self.T_crater.copy())
+					self.T_surf_crater_history.append(self.T_surf_crater.copy())
 
 
 			# Terminate here for fixed temperature run, saving outputs at initialization temperature. Useful for spectroscopy. 

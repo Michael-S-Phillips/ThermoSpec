@@ -22,7 +22,8 @@ class SimulationConfig:
     T_fixed: bool = False             # Use initialization temperature to calculate radiance and emissivity spectra. No thermal evolution. Only valid if diurnal=False.
 
     # Output settings
-    freq_out: int = 48              # Number of outputs per diurnal cycle. 
+    freq_out: int = 48              # Number of outputs per diurnal cycle.
+    history_stride: int = 1         # thin the interpolation history: store only every Nth spin-up step (1 = every step). The output window (final day when last_day=True) is ALWAYS kept at full resolution, so outputs are unaffected; only the pre-output cycles that last_day discards are thinned. Peak history memory for a last_day run drops toward its single-cycle floor as stride grows (~ndays-fold saving), which matters for large-facet-count crater/terrain runs where the per-step T_crater copy dominates memory. Note: the output window is deliberately not thinned -- sharp shadow-transition facets alias under a coarse grid (measured ~50 K cubic-interp overshoot).
     last_day: bool = True            # If True, only output last day of simulation. Otherwise, output data from all days.
     compute_observer_radiance: bool = False  # DEPRECATED: Use radiance_processor module for post-processing instead
     observer_mu: int = np.cos(np.radians(0.0)) #Observer cosine angle for radiance post-processing 
