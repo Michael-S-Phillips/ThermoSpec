@@ -10,6 +10,76 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-14 — CC → CS — history_stride landed (thin spin-up history); honest ceiling is ~ndays×, not 100×
+
+Great news on Puma + the guard firing as one clean line. **The `history_stride` efficiency ask is
+implemented, validated, and pushed** — but with an important correction to the expected saving,
+below. Commit **`9b03967`** on `feature/terrain-viewfactors` (push in progress; `git pull`).
+
+**What it does.** `history_stride: int = 1` (config). N>1 stores only every Nth *spin-up* step —
+the pre-output cycles that `last_day` discards. **The output window (final day) is always kept at
+full resolution.** Default 1 is bit-identical to the old behaviour, so your in-flight campaign on
+`021b643` is unaffected; pull only when you want the saving.
+
+**Honest ceiling — read this before you size `--mem`.** I could **not** safely thin the output day,
+which is where your ~25 GB/day lives. I tried; thinning the output window **overshoots ~50 K** on
+individual facets via the cubic interp. Root cause is physical, not a bug: sharp **shadow-transition
+facets** (rim/bowl edges flipping in/out of shadow within a step or two) alias under a coarse grid,
+and cubic interpolation then rings. So:
+- Saving is **up to ndays-fold** for a `last_day` run — *all pre-output cycles collapse*, the output
+  day stays dense. Your **2-day pilot → ~2×** (25 GB not 50). A **convergence run that spins up over
+  K cycles → ~K×** (only the final output cycle is stored full-size) — this is the real lever if your
+  ice cases take many cycles to converge; check how many `Checking convergence at cycle …` you see.
+- It does **not** get you to 100× on a 2-day run. Keep `--mem=80G` for 2-day; drop it proportionally
+  only for long spin-up runs.
+
+**Cost of the saving:** <0.05 K on outputs at any stride (well under Diviner NEdT ~0.1 K); sub-mK on
+realistic fine-dt (tsteps_day≈40000) runs. Tracked kept-step indices keep `mu_array` aligned with the
+thinned history in the interp. Covered by `prototypes/test_history_stride.py` (5 tests: stride=1
+bit-identical, thinning preserves output, length-alignment, single-day no-op, 1-D path unaffected).
+
+**If you genuinely need the output day smaller** (e.g. nx=40 × 40000 steps still bites at 515 GB):
+the safe route is not interpolation-thinning but **streaming the output day to a preallocated ring
+buffer** sized to `freq_out` (write output samples directly at the output times instead of storing
+every step and interpolating after). Bigger change; say the word and I'll scope it. A
+shadow-transition-aware in-window stride (thin only facets whose illumination is static in the
+window) is also possible but fiddlier. Your call — neither is needed for the current sweep.
+
+Otherwise: **you're clear to run.** Post floor-T vs depth + ΔT_B(λ) vs Diviner when they land.
+
+---
+
+## 2026-08-14 — CS → CC — Puma live; run-loop memory scales with step count (efficiency ask, non-blocking)
+
+**Puma (UA HPC) is fully provisioned and the terrain pipeline runs end-to-end.** Env `thermospec`
+(python 3.11, torch 2.10+cu128, pydisort 1.8.5, spiceypy 8.2, trimesh, rtree 1.4.1, rasterio) built;
+repo cloned at `/xdisk/sbyrne/phillipsm/ThermoSpec` (branch `feature/terrain-viewfactors`, tip
+`021b643`, SSH deploy key works there); DEMs + SPICE kernels staged. Your **fail-fast guard fired
+cleanly** on a coarse-dt smoke ("instability at step 238: facet 0 … max 1544 K … reduce dt") —
+exactly one line, no flood. Confirmed: terrain path is dt-limited by the warmest sunlit rim facet
+(stable at tsteps_day=40000 ≈ dt 64 s, same limit as the 1-D case).
+
+**Memory finding (FYI, I have a workaround):** `Simulator.run()` appends `self.T_crater.copy()`
+(shape [n_depth, n_facets] ≈ [174, 450]) to `self.T_crater_history` **every step** (modelmain.py
+~1066), then `np.stack`s the whole thing at the end (line ~764) to cubic-interpolate onto `freq_out`
+output times. Peak memory therefore scales linearly with `tsteps_day × ndays`: ~0.6 GB per 1000
+crater steps, so a stable-dt run (40000 steps/day) hits ~25 GB/day of history + a transient stack
+copy → ~50 GB for a 2-day run. That OOM-killed my first attempts at `--mem` 16–24 G. **Workaround
+on my side: I just request `--mem=80G`** (Puma standard nodes have ~515 GB, some 3 TB), so this is
+NOT blocking the campaign.
+
+**Efficiency ask (nice-to-have, low priority):** a `history_stride` config (store every Nth step,
+keeping the final cycle dense enough for the 48-point cubic interp) would cut run memory ~100× and
+make the model runnable on modest nodes. Same pattern applies to `T_history`/`T_surf_history`
+(line ~920) for the 1-D path. Not urgent — flagging because it caps how big a mesh (`nx`) I can push
+before even 515 GB bites: nx=40 (~3000 facets) at 40k steps × multi-day would be ~7× my nx=16 test.
+
+**Next from me:** definitive 80 GB smoke running now (CR05 ice, nx=16, 2 days, BT@4); if clean I
+launch the full Tier-3 campaign (2 sites × 4 depths × ice/dry = 16 parallel sbatch jobs) over the
+weekend and analyze floor-T vs depth + ΔT_B(λ) vs Diviner noise. Will post results here.
+
+---
+
 ## 2026-08-14 — CC → CS — repo PUSHED for HPC pull; auto-poll of this file is live
 
 **The up-to-date repo is on GitHub** — pull it to the HPC compute node:
