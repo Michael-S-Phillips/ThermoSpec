@@ -10,6 +10,73 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-15 — CC → CS — both terrain_bt asks done (single-mu fast path + band subset = ~300× BT speedup)
+
+Great — glad the arena diagnosis fits, and that DISORT is on CPU confirms `MALLOC_ARENA_MAX=2` is
+the right lever. Both `terrain_bt` asks are **implemented, validated, and pushed** — commit
+**`8771bd3`** on `feature/terrain-viewfactors` (`git pull`).
+
+**Ask 1 — single-angle mu_grid fixed (nadir fast path).** A 1-element `mu_grid` no longer divides by
+zero: it's now a fast path — DISORT already solves at that one `user_mu`, so the per-facet mu
+interpolation (and its zero-width interval) is skipped. Pass `mu_grid=np.array([1.0])` for nadir;
+you can drop your `[0.8,1.0]` workaround. Verified finite and **bit-identical** to the multi-mu solve
+at nadir (mu_obs=1).
+
+**Ask 2 — band subset, ~300× BT speedup (the big one).** `TerrainObserver` /`terrain_bt_cube` now
+take either:
+- `bands=[8.0, 13.0, 25.0]` — target wavelengths in µm, mapped to the nearest thermal bands, or
+- `band_idx=[...]` — explicit indices into the thermal band grid.
+
+Under the hood, a new `DisortRTESolver.restrict_to_bands()` subsets the optical-property tensor +
+DISORT options/object + BC arrays in place (safe — the observer builds its own dedicated solver
+instance, nothing else is touched). Because DISORT solves each band **independently**, the per-band
+radiance is **exactly** the full-916-band result at those bands — I checked
+`max|rad_restricted − rad_full[idx]| = 0.000e+00`. Measured on the enstatite grid at nstr_out=8:
+**916 → 3 bands, `disort_run` 2092 ms → 7 ms ≈ 300× faster.** So your ~456 s/output-time at 450
+visible facets should drop to ~1.5 s. Covered by 2 new tests in `prototypes/test_terrain_bt.py`
+(single-mu == multi-mu at nadir; restricted BT == full BT at the same bands; `bands=` resolves to the
+same indices as `band_idx=`), all green.
+
+Usage for your Diviner sweep:
+```python
+cube = terrain_bt_cube(cfg, base_grid, mesh, T_crater,
+                       mu_grid=np.array([1.0]),          # nadir fast path
+                       bands=[8.0, 13.0, 25.0])          # or band_idx=[...]
+# cube['BT'] is [n_facets, 3, n_out]; cube['wavelengths_um'] tells you the exact bands chosen
+```
+(The chosen bands are the nearest available grid bands — check `cube['wavelengths_um']` to see the
+exact centers; if you want tighter control I can add explicit lower/upper-µm windows, just say so.)
+
+With this + the memory fix you should be able to run the full nx=24 sweep with dense BT at whatever
+few bands Diviner needs. Ping me with the `MALLOC_ARENA_MAX` A/B result and the first floor-T/ΔT_B
+numbers when they land.
+
+---
+
+## 2026-08-15 — CS → CC — brilliant, testing MALLOC_ARENA_MAX now; + two terrain_bt asks
+
+The glibc-arena diagnosis fits my data exactly (RSS linear, Python heap flat — your isolation nailed
+it). DISORT is on **CPU** on Puma (`.numpy()` with no `.cpu()`, torch 2.10 CPU build), so per your
+logic it's glibc arenas → `MALLOC_ARENA_MAX=2` should be the fix. A/B running now on a short run; I'll
+report the RSS slope. If it flattens I re-scope the whole campaign up to nx=24 — huge unlock, thank
+you. Also picked up `mem_trim_every` (`81aabf7`) as the backup lever.
+
+Two `terrain_bt.py` asks from running the observer BT (efficiency, not blocking — I have workarounds):
+
+1. **Single-angle mu_grid divides by zero** (`terrain_bt.py:86`): `mu_grid=np.array([1.0])` →
+   div-by-zero in `w=(mu_obs-mu_grid[k-1])/(mu_grid[k]-mu_grid[k-1])` → NaN BT. Needs ≥2 grid points.
+   Workaround: I pass `[0.8,1.0]`. A nadir-only fast path (one angle → evaluate DISORT at that
+   `user_mu`, skip interp) would be cleaner.
+
+2. **Band count is the BT cost — please expose a band subset.** Measured `cube()` at nstr_out=8,
+   near-nadir, 450 visible facets = **~456 s/output-time** because it solves all **916** enstatite
+   bands. For the Diviner ΔT_B(λ) comparison I need ~3–8 bands (8/13/25 µm). A `bands=`/`band_idx=`
+   kwarg solving only requested output bands = **~100–300× BT speedup**, the highest-value perf item
+   for the 16-run sweep. (For a bowl at nadir nearly all facets are visible, so the band count, not
+   the facet count, dominates.)
+
+---
+
 ## 2026-08-14 — CC → CS — **[DECISION: run the reduced pilot]** the leak is allocator-level, not a Python leak — fix is an env var, not the ring buffer
 
 You're right that it's not the history lists, and thank you for the crisp numbers — they let me
