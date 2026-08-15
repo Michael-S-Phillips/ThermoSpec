@@ -95,6 +95,50 @@ def test_observer_visibility_masks_hidden_facets():
     assert np.all(np.isfinite(BT[obs.visible]))
 
 
+def test_single_mu_nadir_fast_path():
+    # A single-element mu_grid must not divide by zero (CS ask 1) and must equal the multi-mu
+    # result at nadir, where every facet's emission cosine is 1.
+    cfg = _cfg()
+    g = LayerGrid(cfg)
+    nz = g.x_num
+    flat = DEMMesh(np.zeros((4, 4)), dx=1.0, dy=1.0)
+    T = np.repeat(np.linspace(360.0, 250.0, nz)[:, None], len(flat.normals), axis=1)
+
+    o1 = TerrainObserver(cfg, g, flat, mu_grid=np.array([1.0]))      # single-angle fast path
+    _, BT1 = o1.brightness_temperature(T)
+    assert np.all(np.isfinite(BT1[o1.visible])), "single-mu produced non-finite BT"
+
+    o2 = TerrainObserver(cfg, g, flat, mu_grid=np.linspace(0.1, 1.0, 6))
+    _, BT2 = o2.brightness_temperature(T)
+    assert np.max(np.abs(BT1[o1.visible] - BT2[o2.visible])) < 1e-6, \
+        "single-mu nadir BT disagrees with the interpolated multi-mu BT at mu=1"
+
+
+def test_band_subset_matches_full_and_is_smaller():
+    # Restricting to a few Diviner bands (CS ask 2) must give exactly the full solve's BT at those
+    # bands (DISORT solves bands independently) with a much smaller band axis.
+    cfg = _cfg()
+    g = LayerGrid(cfg)
+    nz = g.x_num
+    flat = DEMMesh(np.zeros((4, 4)), dx=1.0, dy=1.0)
+    T = np.repeat(np.linspace(360.0, 250.0, nz)[:, None], len(flat.normals), axis=1)
+
+    full = TerrainObserver(cfg, g, flat, mu_grid=np.array([1.0]))
+    idx = np.unique([int(np.argmin(np.abs(full.wavelengths_um - t))) for t in (8.0, 13.0, 25.0)])
+    sub = TerrainObserver(cfg, g, flat, mu_grid=np.array([1.0]), band_idx=idx)
+    assert len(sub.wavenumbers) == len(idx)
+    assert np.allclose(sub.wavenumbers, full.wavenumbers[idx])
+
+    _, BTf = full.brightness_temperature(T)
+    _, BTs = sub.brightness_temperature(T)
+    assert np.max(np.abs(BTs[sub.visible] - BTf[sub.visible][:, idx])) < 1e-6, \
+        "restricted-band BT differs from the full solve at the same bands"
+
+    # the wavelength selector `bands=` must resolve to the same indices as explicit band_idx
+    sub2 = TerrainObserver(cfg, g, flat, mu_grid=np.array([1.0]), bands=[8.0, 13.0, 25.0])
+    assert np.array_equal(sub2.wavenumbers, sub.wavenumbers)
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failures = 0

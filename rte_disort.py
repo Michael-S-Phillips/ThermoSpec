@@ -307,7 +307,11 @@ class DisortRTESolver:
             op.ds().nstr = self.cfg.nstr
             op.ds().nphase = self.cfg.nmom
         if self.is_multi_wave:
-            self.lower_wns, self.upper_wns = self._compute_wn_bounds()
+            if getattr(self, '_bounds_from_arrays', False):
+                # rebuilding after restrict_to_bands: use the already-subset bounds, not the file
+                self.lower_wns, self.upper_wns = list(self.lower_wns), list(self.upper_wns)
+            else:
+                self.lower_wns, self.upper_wns = self._compute_wn_bounds()
             self.wn_bin_widths = np.array(self.upper_wns) - np.array(self.lower_wns)
             self.wn_bins = np.append(self.lower_wns,self.upper_wns[-1])
             op.wave_lower(self.lower_wns)
@@ -335,6 +339,45 @@ class DisortRTESolver:
         lower_bounds = wn_bounds[:-1].tolist()  # lower edge for each bin
         upper_bounds = wn_bounds[1:].tolist()   # upper edge for each bin
         return lower_bounds, upper_bounds
+
+    def restrict_to_bands(self, band_idx):
+        """Restrict this multi-wave solver, in place, to a subset of its spectral bands so the
+        DISORT forward solves only those bands. `band_idx` indexes the current self.wavenumbers.
+
+        The DISORT output solve cost scales with the band count, so for an observer BT cube that
+        only needs a few Diviner bands this is a large speedup (solve ~5 bands, not ~900). Rebuilds
+        the optical-property tensor, DISORT options/object, and boundary-condition arrays; leaves
+        the (spatial/angular) configuration untouched. Multi-wave solvers only."""
+        if not self.is_multi_wave:
+            raise ValueError("restrict_to_bands only applies to multi-wave (hybrid/multi_wave) solvers")
+        band_idx = np.atleast_1d(np.asarray(band_idx, dtype=int))
+        if band_idx.min() < 0 or band_idx.max() >= len(self.wavenumbers):
+            raise IndexError(f"band_idx out of range for {len(self.wavenumbers)} bands")
+
+        # subset the spectral arrays
+        self.wavenumbers = self.wavenumbers[band_idx]
+        self.lower_wns = [self.lower_wns[i] for i in band_idx]
+        self.upper_wns = [self.upper_wns[i] for i in band_idx]
+        if hasattr(self, 'emiss_base'):
+            self.emiss_base = np.asarray(self.emiss_base)[band_idx]
+        if getattr(self, 'solar', None) is not None and len(np.atleast_1d(self.solar)) > len(band_idx):
+            self.solar = np.asarray(self.solar)[band_idx]
+
+        # subset the optical-property tensor [nwave, ncol, nlyr, 2+nmom] and rebuild disort
+        self.prop = self.prop[band_idx].contiguous()
+        self._bounds_from_arrays = True                      # make _setup_disort_options reuse bounds
+        self.op = self._setup_disort_options()
+        self.ds = Disort(self.op)
+
+        # rebuild the per-band boundary-condition arrays to the new band count
+        nwave = len(self.wavenumbers)
+        self.nwave = nwave
+        self.fbeam = torch.zeros((nwave, self.n_cols))
+        self.albedo = torch.zeros((nwave, self.n_cols))
+        self.fisot = torch.zeros((nwave, self.n_cols))
+        self.temis = torch.ones((nwave, self.n_cols))
+        self.bc.update(fbeam=self.fbeam, albedo=self.albedo, fisot=self.fisot, temis=self.temis)
+        return self
     
 
 
