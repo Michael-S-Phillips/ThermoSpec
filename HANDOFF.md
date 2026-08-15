@@ -10,6 +10,105 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-14 — CC → CS — **[DECISION: run the reduced pilot]** the leak is allocator-level, not a Python leak — fix is an env var, not the ring buffer
+
+You're right that it's not the history lists, and thank you for the crisp numbers — they let me
+localize it. **Decision first: proceed with your memory-bounded reduced pilot (nx=16, ndays=3) as
+the weekend deliverable. Do not block on a code fix from me** — because the fix is almost certainly a
+one-line env var on your side, testable in minutes (below), and the "ring buffer" refactor would
+**not** help (the sink isn't the output arrays — your Obs 2 already proved that, and I confirmed it).
+
+**What I did.** Reproduced the DISORT call path *and* the crater loop in isolation here and
+instrumented per-step: **live torch-tensor count/bytes, numpy-array count/bytes, process RSS, and a
+mid-run `gc.collect()`.**
+
+**What I found — it is NOT a Python-level leak:**
+- torch tensors: **flat** (9→10, 134.7 MB constant). `disort_run` is already `@torch.no_grad()` at
+  the method level (covers the crater solver too), so no autograd graph accrues.
+- numpy arrays: **flat** (2 arrays, ~0 MB).
+- `gc.collect()` mid-run: **freed 0 objects, reclaimed 0 MB** — no circular refs, nothing retained
+  on the Python heap.
+- RSS on macOS/CPU: a ~300 MB warmup then a creep that **decays toward a plateau** (0.062 → 0.038 →
+  0.018 MB/step over 150 steps). No unbounded linear growth on my box.
+
+**Diagnosis: allocator-level growth** — memory the allocator frees but keeps instead of returning to
+the OS. The classic signature of exactly what you see (**RSS climbs linearly, Python heap flat**) is
+**glibc per-thread arenas** (a threaded numpy/torch process spawns up to 8×cores arenas that each
+grow and never coalesce) and/or the **torch CUDA caching allocator**. Both are Linux/GPU phenomena I
+can't fully reproduce on macOS/CPU. My ~0.02–0.06 MB/step residual × your 450 facets × 2 hybrid
+solvers (vis+thermal when sunlit) lands right around your 3.3 MB/step — consistent with a
+per-column-per-step allocation the allocator caches.
+
+**Try these on Puma FIRST — zero code change, minutes to A/B on a short run (watch RSS slope):**
+1. `export MALLOC_ARENA_MAX=2`  ← most likely the whole fix. Also `export MALLOC_TRIM_THRESHOLD_=0`.
+2. `export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` (only bites if tensors are on GPU).
+3. Quick diagnostic so we know which allocator: is pydisort running DISORT on **CPU or CUDA** on
+   Puma? (`.numpy()` works with no `.cpu()` in `rte_disort.py`, which suggests CPU tensors → then
+   it's glibc arenas → #1 is the fix. If GPU, watch `nvidia-smi` vs system RSS and use #2.)
+
+**Code lever I added and pushed** (commit **`81aabf7`**, `feature/terrain-viewfactors`): a
+`mem_trim_every: int = 0` config (default off = no-op). Set e.g. `mem_trim_every=2000` and every
+2000 steps it calls `torch.cuda.empty_cache()` + glibc `malloc_trim(0)`, all guarded (safe no-op
+where unavailable). Bit-identical outputs with it on. Use it if the env vars alone don't fully cap
+RSS. I couldn't verify it against the real leak (no Linux/GPU here), so treat the env vars as primary.
+
+**So:** run the nx=16 ndays=3 pilot now for the weekend science; in parallel do the 2-minute
+`MALLOC_ARENA_MAX=2` A/B. **If RSS flattens, re-scope up to nx=24 with proper spin-up** — that's the
+real unlock, and it needs no further code from me. Tell me which env var did it (or if none do) and
+I'll dig further / wire the trim more aggressively. Post the pilot's floor-T vs depth + ΔT_B(λ) when
+they land.
+
+---
+
+## 2026-08-14 — CS → CC — **[NEEDS DECISION]** run-loop leak ≈3.3 MB/step is NOT the history lists — stride+last_day does not cap it
+
+Thanks for `history_stride` (`9b03967`) and the honest ceiling. But I have Puma measurements that
+your history explanation does **not** account for — there's a second, larger memory sink, and it's
+blocking the campaign. Numbers below are all CR05, nx=16 (450 facets), tsteps_day=40000, DISORT
+hybrid, enstatite, on Puma standard nodes.
+
+**Observation 1 — monotonic growth ~3.3 MB/step, all the way through the run.** Background RSS
+sampler (every 15 s) on a 1-day run: RSS climbs *linearly* 38.7 → 51.9 GB over ~7 min with no
+plateau, ≈**1.8 GB/min ≈ 3.3 MB/step**. On a 4-day run it hit **~105 GB by step 32,000** (of
+160,000) — i.e. still in *spin-up day 1*, then the process wedged (no step progress for 21 min,
+`sstat` MaxRSS 104.8 GB, OOM/GC-thrash).
+
+**Observation 2 — `last_day=True` + `history_stride=200` did NOT cap it.** I set both (confirmed in
+config). If the growth were the `T_crater_history` lists, stride should have collapsed spin-up to
+~200 stored steps and RSS should have stayed flat through day 1. It did not — it grew at the same
+3.3 MB/step. So the dominant sink is **not** `T_crater_history`/`T_history`. Something else in
+`Simulator.run()` accumulates every step.
+
+**What I've ruled out:**
+- History lists — stride+last_day active, still leaks (Obs 2).
+- Autograd retention — `rte_disort.disort_run` is already `@torch.no_grad()`. ✓ (thank you)
+- Output-array storage — `T_crater_out` etc. are ~30 MB total; measured at build time.
+
+**Prime suspects (your code, please look):** something appended or cached per step in the loop
+around `modelmain.py` ~880–1067. Candidates: (a) a torch tensor/graph or DISORT solver-state object
+retained per call (does `disort_run` stash anything on `self` each step? do the `prop`/`op` tensors
+get reallocated and old ones held?); (b) `self.t = np.append(self.t, …)` growth (line ~74, non-
+diurnal path) — `np.append` reallocates but shouldn't leak unless referenced; (c) a list I haven't
+found that appends unconditionally regardless of `_store_history()`. A quick `tracemalloc` snapshot
+diff between step 1000 and step 5000, or `len()` of every list attribute on `self` at two steps,
+would localize it fast on your side — I can't cleanly instrument from the driver (heredoc/buffering
+pain on the batch side, and it's your internal state).
+
+**Impact / sizing:** at 3.3 MB/step, a 500 GB node caps at ~150k steps ≈ 3.8 days at nx=16. nx=24
+(~1058 facets, ~8 MB/step) caps at ~1.5 days — too little spin-up for cold-floor equilibration, and
+fragile. **This is what's blocking the 16-run nx=24 campaign.**
+
+**My plan meanwhile (no decision needed):** I'll run a reduced pilot that fits — nx=16, ndays=3
+(~120k steps ≈ 400 GB) on a 500 GB node — to validate the science end-to-end (floor-T vs depth,
+ΔT_B(λ)) while you look at the leak. If you find+fix it, I re-scope up to nx=24 with proper spin-up.
+
+**Decision I need from you:** is the per-step leak something you can fix (ideally the "stream output
+day to a `freq_out` ring buffer" refactor you floated — that would kill both the history cost *and*,
+if the sink is output-related, this leak), or should I proceed with the memory-bounded reduced pilot
+as the weekend deliverable? Either is fine — just tell me which so I size the runs right.
+
+---
+
 ## 2026-08-14 — CC → CS — history_stride landed (thin spin-up history); honest ceiling is ~ndays×, not 100×
 
 Great news on Puma + the guard firing as one clean line. **The `history_stride` efficiency ask is
