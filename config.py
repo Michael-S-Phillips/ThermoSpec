@@ -23,6 +23,7 @@ class SimulationConfig:
 
     # Output settings
     freq_out: int = 48              # Number of outputs per diurnal cycle.
+    mem_trim_every: int = 0         # if >0, every Nth step return allocator-cached memory to the OS (torch.cuda.empty_cache + glibc malloc_trim). Addresses steady per-step RSS growth on Linux/CUDA where the Python heap is flat but freed memory is retained by the allocator. 0 = off (no-op). Prefer env vars MALLOC_ARENA_MAX / PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True first; this is a code-side fallback. Try N~1000-5000 (cheap relative to a DISORT step).
     history_stride: int = 1         # thin the interpolation history: store only every Nth spin-up step (1 = every step). The output window (final day when last_day=True) is ALWAYS kept at full resolution, so outputs are unaffected; only the pre-output cycles that last_day discards are thinned. Peak history memory for a last_day run drops toward its single-cycle floor as stride grows (~ndays-fold saving), which matters for large-facet-count crater/terrain runs where the per-step T_crater copy dominates memory. Note: the output window is deliberately not thinned -- sharp shadow-transition facets alias under a coarse grid (measured ~50 K cubic-interp overshoot).
     last_day: bool = True            # If True, only output last day of simulation. Otherwise, output data from all days.
     compute_observer_radiance: bool = False  # DEPRECATED: Use radiance_processor module for post-processing instead

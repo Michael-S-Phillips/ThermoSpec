@@ -747,6 +747,24 @@ class Simulator:
 		return False  # Continue simulation
 
 
+	def _trim_memory(self):
+		"""Best-effort return of allocator-cached memory to the OS (opt-in via mem_trim_every).
+
+		The per-step RSS growth is allocator-level, not a Python leak (Python heap flat,
+		gc.collect reclaims nothing), so this releases torch's CUDA cache and glibc's freed arenas.
+		All calls are guarded -- a no-op wherever the mechanism is unavailable (e.g. macOS libc has
+		no malloc_trim). Cheap relative to a DISORT step but not free, so call every N steps."""
+		try:
+			if torch.cuda.is_available():
+				torch.cuda.empty_cache()
+		except Exception:
+			pass
+		try:
+			import ctypes
+			ctypes.CDLL("libc.so.6").malloc_trim(0)   # glibc/Linux only; harmless elsewhere via except
+		except Exception:
+			pass
+
 	def _store_history(self):
 		"""Whether the current step's state is kept in the interpolation history.
 
@@ -1151,7 +1169,17 @@ class Simulator:
 				print(f"Time step {j}/{self.t_num}")
 			elif not self.cfg.diurnal and j % max(100, 1000) == 0:
 				print(f"Non-diurnal step {j}, time={self.current_time:.2f}s")
-			
+
+			# Optional periodic allocator trim (opt-in; default off is a no-op). Addresses the
+			# steady per-step RSS growth CS measured on Puma: the Python heap is flat and gc.collect
+			# reclaims nothing (verified), so the growth is allocator-level -- freed memory the
+			# glibc arenas / torch CUDA caching allocator hold instead of returning to the OS. This
+			# returns it every mem_trim_every steps. Prefer the env-var fixes first (MALLOC_ARENA_MAX
+			# for glibc, PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True for CUDA); this is a
+			# code-side fallback and diagnostic knob.
+			if getattr(self.cfg, 'mem_trim_every', 0) and (j % self.cfg.mem_trim_every == 0):
+				self._trim_memory()
+
 			# Increment loop counter
 			j += 1
 			
