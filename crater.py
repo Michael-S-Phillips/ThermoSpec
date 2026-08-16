@@ -235,17 +235,14 @@ class CraterRadiativeTransfer:
             Q_scattered =np.zeros((n_facets,n_waves))
             Q_direct = np.zeros((n_facets,n_waves))
 
-        # Self-heating (thermal IR)
-        Q_selfheat = np.zeros((n_facets,n_waves))
-        for i in range(n_facets):
-            idxs = self.selfheating.indices[i]
-            if(therm_flux.ndim == 1):
-                #Should be of size [ncols, nwave] or [ncols, 1]
-                vfs = self.selfheating.view_factors[i]
-            else:
-                vfs = self.selfheating.view_factors[i][:,None]
-            #Q_selfheat[i] = emissivity * sigma * np.sum((T_surface[list(idxs)] ** 4) * vfs)
-            Q_selfheat[i] = np.sum(therm_flux[list(idxs)] * vfs,axis=0)
+        # Self-heating (thermal IR). Q_selfheat[i] = sum_j vf[i->j] * therm_flux[j], which is exactly
+        # view_matrix @ therm_flux (view_matrix is zero off facet i's neighbour set, so the dense
+        # matmul sums the same nonzero terms the per-facet sparse loop did) -- one BLAS matmul instead
+        # of a Python loop over all facets, the other half of the O(N^2) per-step self-heating cost.
+        if therm_flux.ndim == 1:
+            Q_selfheat = np.tile((self.view_matrix @ therm_flux)[:, None], (1, n_waves))
+        else:
+            Q_selfheat = self.view_matrix @ therm_flux
         if(n_waves==1):
             return Q_direct[:,0], Q_scattered[:,0], Q_selfheat[:,0], cosines[:,0]
         else:
@@ -257,12 +254,13 @@ def compute_multiple_scattered_sunlight(
     Alb, F_sun, illum_frac, sun_cosines, view_matrix, max_iter=100, tol=1e-5
 ):
     N = len(illum_frac)
-    G = Alb * F_sun * illum_frac * sun_cosines  # Initial guess
+    direct = F_sun * illum_frac * sun_cosines
+    G = Alb * direct  # Initial guess
     for iteration in range(max_iter):
-        G_new = np.zeros_like(G)
-        for i in range(N):
-            sum_vf = np.dot(view_matrix[i], G)
-            G_new[i] = Alb[i] * (F_sun * illum_frac[i] * sun_cosines[i] + sum_vf)
+        # Vectorized Jacobi sweep: view_matrix @ G is exactly the per-row np.dot(view_matrix[i], G)
+        # this loop used to compute, but as one BLAS matmul (the O(N^2) inter-facet coupling that
+        # dominated the per-step crater cost at large facet counts).
+        G_new = Alb * (direct + view_matrix @ G)
         if np.allclose(G_new, G, rtol=tol, atol=tol):
             break
         G = G_new
@@ -271,7 +269,7 @@ def compute_multiple_scattered_sunlight(
     # Subtract the direct beam (F_sun*illum*cos) so this returns the purely-SCATTERED increment;
     # the surface BC adds the absorbed direct beam separately (Q_dir), so returning the total here
     # double-counted the direct beam on illuminated facets (see docs/CRATER_FLUX_FINDING.md).
-    direct = F_sun * illum_frac * sun_cosines
+    # (`direct` computed above and reused here.)
     if(Alb.shape[1]==F_SCAT.shape[1]):
         F_SCAT[Alb>0.0] /= Alb[Alb>0.0]
         F_SCAT[Alb>0.0] -= direct[Alb>0.0]
