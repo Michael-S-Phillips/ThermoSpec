@@ -68,6 +68,32 @@ def test_selfheat_matches_loop():
         assert np.max(np.abs(Q_self - ref)) < 1e-9, f"n_waves={n_waves}: {np.max(np.abs(Q_self-ref)):.2e}"
 
 
+def test_vf_threshold_zero_is_dense_and_exact():
+    # default (0.0) must keep the dense operator and be bit-identical to the plain view matrix
+    mesh, sh, crt, N = _setup()
+    assert not hasattr(crt.view_matrix, "nnz"), "threshold 0 should stay dense"
+    crt0 = CraterRadiativeTransfer(mesh, sh, vf_threshold=0.0)
+    assert np.array_equal(crt0.view_matrix, sh.as_view_matrix(N))
+
+
+def test_vf_threshold_row_sum_semantics_and_flux_error():
+    # row-sum sparsify: dropping frac f of each row's weight bounds the self-heating flux error to
+    # ~f, and the sparse operator (@) matches the dense one to that tolerance.
+    from crater import _row_sum_sparsify
+    from scipy.sparse import csr_matrix
+    mesh, sh, crt, N = _setup()
+    vm = sh.as_view_matrix(N)
+    therm = 0.95 * 5.67e-8 * (np.linspace(120, 260, N) ** 4)
+    q_dense = vm @ therm
+    for drop, tol in ((1e-3, 3e-3), (1e-2, 3e-2)):
+        sp = _row_sum_sparsify(vm, drop)
+        # row sums preserved to >= (1 - drop)
+        assert np.all(sp.sum(1) >= (1 - drop - 1e-9) * vm.sum(1) - 1e-12)
+        q_sp = csr_matrix(sp) @ therm
+        rel = np.max(np.abs(q_sp - q_dense)) / max(np.max(np.abs(q_dense)), 1e-30)
+        assert rel < tol, f"drop={drop}: rel flux error {rel:.2e} exceeds {tol}"
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failures = 0

@@ -49,7 +49,8 @@ class Simulator:
 			                           else SelfHeatingList(self.cfg.crater_selfheating))
 			self.crater_shadowtester = ShadowTester(self.crater_mesh)
 			self.crater_radtrans = CraterRadiativeTransfer(
-				self.crater_mesh, self.crater_selfheating)
+				self.crater_mesh, self.crater_selfheating,
+				vf_threshold=getattr(self.cfg, 'selfheat_vf_threshold', 0.0))
 			
 			# Initialize observer radiance calculator if enabled
 			if self.cfg.compute_observer_radiance:

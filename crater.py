@@ -191,11 +191,43 @@ class ShadowTester:
 
 # ------------------ Radiative Source Terms + Multiple Scattering ------------------
 
+def _row_sum_sparsify(vm, drop_frac):
+    """Per row, keep the largest entries capturing (1 - drop_frac) of the row sum; zero the rest.
+    Preserves each facet's total self-heating weight to ~drop_frac regardless of mesh size."""
+    vm = np.asarray(vm, float)
+    out = np.zeros_like(vm)
+    for i in range(vm.shape[0]):
+        row = vm[i]
+        total = row.sum()
+        if total <= 0.0:
+            continue
+        order = np.argsort(row)[::-1]                       # largest first
+        cs = np.cumsum(row[order])
+        keep = int(np.searchsorted(cs, (1.0 - drop_frac) * total)) + 1
+        idx = order[:keep]
+        out[i, idx] = row[idx]
+    return out
+
+
 class CraterRadiativeTransfer:
-    def __init__(self, mesh, selfheating):
+    def __init__(self, mesh, selfheating, vf_threshold=0.0):
         self.mesh = mesh
         self.selfheating = selfheating
-        self.view_matrix = self.selfheating.as_view_matrix(len(self.mesh.normals))
+        vm = self.selfheating.as_view_matrix(len(self.mesh.normals))
+        # Optional sparsification of the per-step self-heating / radiosity operator, storing it CSR
+        # so every per-step `view_matrix @ x` (self-heating + the multiple-scattering sweep) is
+        # ~O(nnz) instead of O(N^2) -- the lever for high-node-count PSR scenes. `vf_threshold` is
+        # the FRACTION of each facet's total view-factor weight (row sum = its self-heating budget)
+        # that may be dropped: per row we keep the largest F_ij that capture (1 - vf_threshold) of
+        # the row sum and drop the negligible tail. This is scale-invariant (an absolute F_ij cutoff
+        # is not: on a large mesh a facet's flux is spread over many small F_ij) and bounds the
+        # per-facet flux error to ~vf_threshold, so ~1e-2 keeps floor T / dT_B well within 0.1 K vs a
+        # 6-19 K ice signal. NOT bit-exact. 0.0 = dense, exact (default).
+        self.vf_threshold = float(vf_threshold or 0.0)
+        if self.vf_threshold > 0.0:
+            self.view_matrix = csr_matrix(_row_sum_sparsify(vm, self.vf_threshold))
+        else:
+            self.view_matrix = vm
 
     def compute_fluxes(self, sun_vec, illuminated, therm_flux, albedo, emissivity,F_sun, n_waves=1,multiple_scatter=True, max_iter=100, tol=1e-6):
         #therm_flux should be equivalent to emissivity*sigma*T**4 for broadband, or the appropriate narrowband integrated value. 
