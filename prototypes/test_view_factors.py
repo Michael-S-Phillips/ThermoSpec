@@ -75,6 +75,27 @@ def test_numpy_and_trimesh_occlusion_backends_agree():
     assert np.max(np.abs(Fn - Ft)) < 1e-12
 
 
+def test_numba_backend_matches_numpy_on_dem_bowl():
+    # the numba grid-DDA occluder must be bit-identical to the numpy full scan (it's a broadphase +
+    # the same Moller-Trumbore test), on a concave DEM bowl where occlusion actually happens.
+    import view_factors as vf
+    if not vf._HAS_NUMBA:
+        print("  (numba not installed -- skipping)")
+        return
+    from topography import DEMMesh
+    n = 20
+    ax = np.arange(n) - (n - 1) / 2.0
+    X, Y = np.meshgrid(ax, ax)
+    d = np.hypot(X, Y)
+    dem = np.where(d < n * 0.45, -4.0 * (1.0 - (d / (n * 0.45)) ** 2), 0.0)
+    m = DEMMesh(dem, dx=10.0, dy=10.0)
+    Fnp = compute_view_factors(m, occlusion=True, occlusion_backend='numpy')
+    Fnb = compute_view_factors(m, occlusion=True, occlusion_backend='numba')
+    assert np.max(np.abs(Fnp - Fnb)) == 0.0, f"numba != numpy: {np.max(np.abs(Fnp-Fnb)):.2e}"
+    Fauto = compute_view_factors(m, occlusion=True, occlusion_backend='auto')
+    assert np.array_equal(Fauto, Fnb), "auto backend should pick numba and match"
+
+
 def test_write_reload_roundtrip(tmp_path=None):
     m = CraterMesh(CRATER)
     F = compute_view_factors(m, occlusion=True)
