@@ -160,10 +160,35 @@ class SelfHeatingList:
 
 # ---------------------- Shadow Tester ----------------------
 
+def _sun_first_hit_numpy(sub_vertices, sub_faces, origins, direction, eps=1e-6):
+    """Dependency-free replacement for trimesh `ray.intersects_first`: the index of the nearest
+    triangle each ray (shared `direction`) hits, or -1. Pure-numpy Moller-Trumbore, vectorised over
+    triangles. Avoids trimesh's rtree/libspatialindex ray engine, which silently returns no hits
+    (-> every facet reads as shadowed, Q_direct=0 everywhere) when that native lib fails to load."""
+    tris = sub_vertices[sub_faces]
+    v0 = tris[:, 0, :]; e1 = tris[:, 1, :] - v0; e2 = tris[:, 2, :] - v0
+    d = np.asarray(direction, float); d = d / np.linalg.norm(d)
+    p = np.cross(d, e2)
+    det = np.einsum('ij,ij->i', e1, p)
+    ok_det = np.abs(det) > eps
+    inv = np.where(ok_det, 1.0 / np.where(ok_det, det, 1.0), 0.0)
+    first = np.full(len(origins), -1, dtype=np.int64)
+    for k in range(len(origins)):
+        t0 = origins[k] - v0
+        u = np.einsum('ij,ij->i', t0, p) * inv
+        q = np.cross(t0, e1)
+        v = (q @ d) * inv
+        t = np.einsum('ij,ij->i', e2, q) * inv
+        hit = ok_det & (u >= -eps) & (v >= -eps) & (u + v <= 1 + eps) & (t > eps)
+        if hit.any():
+            first[k] = int(np.argmin(np.where(hit, t, np.inf)))
+    return first
+
+
 class ShadowTester:
     def __init__(self, mesh: CraterMesh):
-        self.mesh = trimesh.Trimesh(vertices=mesh.vertices, faces=mesh.faces, process=False)
-        self.sub_mesh = trimesh.Trimesh(vertices=mesh.sub_vertices, faces=mesh.sub_faces, process=False)
+        self.sub_vertices = np.asarray(mesh.sub_vertices, float)
+        self.sub_faces = np.asarray(mesh.sub_faces)
         self.sub_centroids = mesh.sub_centroids
         self.centroids = mesh.centroids
         self.mapping = mesh.sub_face_index
@@ -171,10 +196,10 @@ class ShadowTester:
 
     def illuminated_facets(self, sun_vec):
         n_facets = self.sub_centroids.shape[0]
-        offsets = 40.0 * sun_vec #move the source of the solar vector sufficiently far away so that it is outside of the crater. 
+        offsets = 40.0 * sun_vec #move the source of the solar vector sufficiently far away so that it is outside of the crater.
         origins = self.sub_centroids + offsets
-        directions = np.tile(-sun_vec / np.linalg.norm(sun_vec), (n_facets, 1))
-        index_tri = self.sub_mesh.ray.intersects_first(origins, directions)
+        direction = -sun_vec / np.linalg.norm(sun_vec)
+        index_tri = _sun_first_hit_numpy(self.sub_vertices, self.sub_faces, origins, direction)
         index_ray = np.arange(n_facets)
         illuminated = np.zeros(len(self.centroids))
         match = index_ray==index_tri
