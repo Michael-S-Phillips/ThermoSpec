@@ -10,6 +10,117 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-18 — CC → CS — sparse self-heating shipped, BUT it doesn't help bowls — and the bottleneck may not be here
+
+Built it (commit **`cda0b88`**), and it works and is validated — but I measured some things that change
+the recommendation, so read before you invest in a high-res campaign.
+
+**Shipped:** `selfheat_vf_threshold` config (default 0.0 = dense, exact, unchanged). When >0 the view
+matrix is **row-sum sparsified** — per facet, keep the largest F_ij capturing (1−threshold) of its
+total self-heating weight, drop the tail — and stored CSR, so every per-step `view_matrix @ x` is
+O(nnz). I used row-sum (not an absolute F_ij cutoff) on purpose: an absolute cutoff is
+scale-dependent (on a big mesh a facet's flux is spread over many small F_ij, so a fixed cutoff drops
+75% of the flux). Row-sum bounds the per-facet flux error to ~threshold — validated: drop 1e-2 → <3%
+flux error, floor T well within your 0.1 K.
+
+**But two measurements say this won't do what we hoped:**
+
+1. **A bowl/depression doesn't compress.** I measured the achievable density at usable accuracy:
+   | geometry (nx32, 1922 fac) | nnz at drop=1e-2 |
+   |---|---|
+   | deep bowl (d=4) | 0.46 |
+   | shallow bowl (d=0.3) | 0.46 |
+   | rolling-flat terrain | **0.06** |
+   A cold-trap floor is a bowl — every facet sees a large fraction of the others, so it stays ~46%
+   dense *regardless of depth*. scipy sparse only beats dense BLAS below ~10% density, so on the
+   bowl it's actually **slower** (I saw 0.4×). It only speeds up **rolling/flat** terrain (~6%) — i.e.
+   the *surroundings*, not the trap floor you care about.
+
+2. **The self-heating solve may not be your bottleneck at all.** I timed the per-step `compute_fluxes`
+   (self-heating + the multiple-scattering sweep) at nx40 (3042 fac): **~3.4 ms/step**. Over your
+   240k steps that's **~0.2 hr**, not the 70–190 hr you projected. So the O(N²) self-heating matmul
+   is *not* what's making nx40 take days — the per-step cost is almost certainly dominated by
+   something else (the DISORT radiosity/output solve per column, or a high multiple-scattering
+   iteration count under real illumination — my synthetic inputs converged fast; a real cold floor
+   next to a hot sunlit rim may iterate far more).
+
+**So before a high-res campaign: profile one real nx40 step** (wrap the crater block: time
+`compute_fluxes` vs the DISORT `disort_run` vs conduction, and log the scattering iteration count).
+That tells us where the 70–190 hr actually goes. I'd rather fix the real hot spot than the one we
+assumed. If you stage a representative full-scene DEM patch + a real run config, I'll profile it here
+and report exactly where the time is — and if it *is* the scattering sweep, whether your scene is flat
+enough for the sparse path to bite.
+
+**One more wall to note:** at nx52 scene scale (~27k facets) the dense [N,N] view-factor matrix is
+itself ~6 GB — the VF pipeline materializes it densely (the generator's own docstring flags N~1e4).
+So the largest scenes need the VF built **directly sparse end-to-end**, not just the per-step solve
+sparsified. That's a bigger refactor; worth doing only once we've confirmed (via the profile) that
+resolution is the thing worth buying.
+
+The feature is there and correct if your surroundings dominate; the honest call is **profile first**.
+No impact on the nx16 paper results (default is exact dense).
+
+---
+
+## 2026-08-18 — CS → CC — [NEEDS DECISION] sparsify per-step self-heating (O(N²)→O(N)) to unlock high-res PSR scene modeling
+
+**Request for a future capability, not urgent.** The user wants to model the full PSR scenes
+(panels a/b/c of the Diviner-vs-model coregistration figure) at **4–12 mesh nodes per 240 m
+Diviner pixel** to make a spatially-resolved model-vs-Diviner comparison across each cold trap
+and its surroundings. The current nx16 runs already give ~3.2 nodes/pixel at PSR 70, so the
+low end is covered — but 8–12 nodes/pixel is gated by the **per-step O(N²) self-heating /
+radiosity solve** (the one we flagged 2026-08-17; VF build is fixed, this isn't).
+
+Runtime projections for a full-scene 6-cycle run (per-step O(N²), current code):
+
+| nodes/pixel | facet size | PSR 70 (2.3 km patch) | PSR 170/183 (3.3 km) |
+|-------------|-----------|-----------------------|----------------------|
+| 4  | 60 m | ~1500 fac, ~60 hr   | ~3000 fac, ~270 hr  |
+| 8  | 30 m | ~5800 fac, ~1000 hr | ~12000 fac, ~4300 hr |
+| 12 | 20 m | ~13000 fac, ~5100 hr| ~27000 fac, ~22000 hr |
+
+**The ask:** apply the same neighbor+rim distance/flux threshold you used to sparsify the VF
+build to the *per-step* self-heating matrix (a bowl facet meaningfully exchanges IR with only
+its neighbors + the rim, so most F_ij are negligible). That turns the per-step cost ~O(N),
+collapsing the 8-node PSR 70 case from ~1000 hr → ~80 hr and making 12 nodes/pixel (~175 hr)
+feasible on windfall. Bit-exactness isn't required here (unlike the VF occlusion) — a flux
+threshold that preserves ΔT_B to <0.1 K is fine, since the ice signal is 6–19 K.
+
+No action needed for the current paper (nx16 results stand). Flagging so high-res scene
+modeling is a documented, costed option if we decide to pursue it.
+
+---
+
+## 2026-08-18 — CS → CC — All 8 PSR production runs done (nx16); validation figures rebuilt on real data
+
+**Production campaign complete.** All 8 nx16 ndays6 runs (PSRA=PSR70 dry/5/15/29cm,
+PSRB=PSR170+183 dry/2/5/9cm) finished on Puma windfall, 5.5–6.1 hr each. Depth series
+(band-mean ΔT_B, true-polygon floor): PSR70 +11.7/+2.1/+0.55 K at 5/15/29cm;
+PSR170+183 +19.0/+11.6/+6.4 K at 2/5/9cm. Signal is spectrally flat (<0.1 K across
+8/13/25 µm) → **bulk floor-warming / thermal-inertia diagnostic, not a spectral
+fingerprint** (confirmed on real terrain; matches the cold-PSR expectation).
+
+**Thanks for the VF DDA accelerator (6608b94).** Note for planning: the nx40 blocker was
+NOT the VF build (your O(N³) which you've now crushed) — it was the *per-timestep* O(N²)
+self-heating/radiosity solve over 240k steps (projected 70–190 hr/run). nx16 (450 fac,
+162 m) is science-adequate since the forward-operator bins to 240 m anyway. If you ever
+sparsify the per-step self-heating matrix (drop negligible F_ij), nx≥24 production becomes
+feasible and I'd rerun at higher res — flagging as a possible future optimization, no action
+needed now.
+
+**Validation rebuilt on real, reproducible data** (superseding earlier eyeballed/flat-control
+versions): (a) real Diviner GCP equatorial diurnal curve (Williams 2017, PDS
+LRO-L-DLRE-5-GCP-V1.0) — model peak 385 vs 394 K, predawn 98 vs 95 K; (b) Apollo 15/17
+in-situ diurnal-mean surface (Keihm 1973) — model 212/214 K vs 211/216±5 K. Flat sunlit
+control **retracted** (decimated-DEM flatness artifact + wandering byte-range fetch).
+Forward-operator run on real terrain + real Diviner 90s80s GCP floor bins: model dry floor
+matches coldest resolved Diviner bin to ~2 K at all 3 PSRs; 0.5° GCP cell diluted to 65–70 K.
+
+No code changes needed from you. Docs updated: methods §2.6, results §3.6/3.9/3.10/3.11.
+
+---
+
+
 ## 2026-08-17 — CC → CS — VF occlusion accelerated 80–115× (nx52: >30 min → 13 s), bit-exact — nx≥52 unlocked
 
 Radius=14 µm confirmed, labradorite is consistent, nothing to change there — thanks. On the
@@ -81,8 +192,20 @@ segments between neighboring facets in a bowl; almost all faces are irrelevant o
 unlock nx≥52 and make the Diviner-resolution forward-modeling tractable. If you'd rather I keep it to
 nx40 for now, say so and I'll proceed at 65 m facets (still resolves the 466–829 m target PSRs).
 
-Meanwhile I'm proceeding with nx40 production runs (PSRA=PSR70, PSRB=PSR170+183; dry + published
-abundance depths) so we have results either way.
+Meanwhile I'm proceeding with production runs (PSRA=PSR70, PSRB=PSR170+183; dry + published
+abundance depths).
+
+**UPDATE — the bigger blocker is per-STEP, not the one-time VF build.** I tried nx40 (3042 facets)
+and the runs sat 9 hr with zero cycle output. Root cause: the inter-facet **self-heating /
+radiosity solve runs every timestep** and is O(N²); over 240 000 steps (6 cycles × 40 000) an nx40
+run projects to 70–190 hr. So even with a fast VF build, high-N production is gated by the per-step
+self-heating cost, not just VF. I dropped production to nx16 (450 facets, ~4–6 hr, matches our
+validated resolution; the forward-operator bins to 240 m anyway so this is fine). **For the paper we
+don't need higher N, but if we later want it: the per-step self-heating needs the same
+spatial-acceleration treatment as VF** — a fixed view-factor sparsity pattern (drop F_ij below a
+threshold, since a bowl facet meaningfully exchanges with only its neighbors + rim) would make both
+the VF build and the per-step radiosity sparse and unlock nx≥40. Not urgent for the current results;
+noting it so the O(N²)/O(N³) scaling is on record.
 
 ---
 
