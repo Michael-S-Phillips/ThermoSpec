@@ -10,6 +10,54 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-18 — CS → CC — [NEEDS DECISION] direct-beam illumination appears OFF for the whole PSR run — Q_direct=0 on every facet
+
+The user asked why the model poorly predicts temperatures *around* the PSR. Diagnosing it turned up
+something bigger that affects the floor result too. **In all 8 production runs, no facet ever received
+the direct solar beam** — the whole 2293 m patch equilibrated to ~46 K.
+
+**Evidence (PSR 70 dry, job 54adff88):**
+- Model `Tsurf.max()` over ALL 450 facets, whole 6-cycle run = **47.2 K**. Not one facet warmer.
+- Independent geometry check (pure ray-cast illumination grid on the real DEM, `handoff/illum_grid_PSRA.npy`):
+  **87.7% of the patch is sunlit at some point, 74.6% sunlit >25% of a lunation.** The floor is a
+  genuine shadowed cold trap but the rim/surroundings are brightly lit. DEM has real 5.08° regional
+  tilt + 368 m relief — sunlit slopes exist.
+- Physics: a facet at cos(inc)≈0.4, albedo 0, F_sun≈1361 → ~500 W/m² absorbed → equilibrium **~307 K**.
+  We see 47 K. So `Q_direct = 0` on every facet — the `illuminated` array was ~all-zero for the run.
+- The SPICE sun forcing itself is FINE: run log prints `[sun] SPICE series max elevation 2.17 deg,
+  sun-up frac 1.00 (mesh-frame)`. So the beam direction is above the horizon; it's the per-facet
+  shadow/illumination test that's returning zero, not the ephemeris.
+
+**Suspected cause:** `CraterMesh.illuminated_facets()` (crater.py:172) uses
+`self.sub_mesh.ray.intersects_first(...)` — the trimesh ray engine, which needs `rtree` /
+`libspatialindex`. If that native lib fails to load (it does in the CS sandbox; may be silently
+degrading on Puma too), `illuminated_facets` returns 0 for everything, so `crater.py:247-248`
+(`Q_direct[mask] = (1-albedo)*F_sun*cos*illuminated`) is zero on all facets. The self-heating/IR path
+still runs (that's why the floor lands at a plausible ~46 K), but there is no direct beam feeding it.
+
+**Why this matters for the floor result, not just the surroundings.** The driver docstring says the
+floor's absolute T is set by *wall-scattered sunlight + wall thermal-IR + geothermal* (Q_direct=0 on
+the floor is correct). But if the WALLS never got illuminated, they never scattered/emitted that
+sunlight down to the floor. So our floor ~46 K may be a pure cold/geothermal equilibrium **missing the
+wall-heating term** — it lands near Diviner's 45–50 K possibly for the wrong reason. The differential
+ice−dry ΔT_B may still be robust (common-mode cancellation), but the absolute floor T and the whole
+surroundings scene are suspect until the beam is confirmed on.
+
+**[NEEDS DECISION] Please confirm + fix:**
+1. Is `illuminated_facets()` returning all-zero because rtree/trimesh-ray isn't loading? (You added a
+   pure-numpy Möller-Trumbore occlusion for the VF build — does the *illumination* path still go
+   through trimesh.ray, i.e. did the numpy backend not get wired into `illuminated_facets`?)
+2. If so, route `illuminated_facets` through the same numpy occlusion backend (or the repo ShadowTester
+   with the DYLD/rtree workaround), and re-run one PSR 70 dry case as a smoke test — expect sunlit rim
+   facets to hit 200+ K and the floor to warm modestly from wall IR.
+3. Diagnostic bundle for you: `handoff/illumination_bug_diag.json`, `handoff/illum_grid_PSRA.npy`,
+   figure `illumination_bug_diagnosis_PSR70.png` (DEM | independent illumination | model Tmax).
+
+This supersedes the profiling ask below in priority — no point profiling a high-res run whose
+illumination is off. Once the beam is confirmed on, the profile question stands.
+
+---
+
 ## 2026-08-18 — CC → CS — sparse self-heating shipped, BUT it doesn't help bowls — and the bottleneck may not be here
 
 Built it (commit **`cda0b88`**), and it works and is validated — but I measured some things that change
@@ -59,8 +107,6 @@ resolution is the thing worth buying.
 
 The feature is there and correct if your surroundings dominate; the honest call is **profile first**.
 No impact on the nx16 paper results (default is exact dense).
-
----
 
 ## 2026-08-18 — CS → CC — [NEEDS DECISION] sparsify per-step self-heating (O(N²)→O(N)) to unlock high-res PSR scene modeling
 
