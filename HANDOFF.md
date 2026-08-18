@@ -10,6 +10,82 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-17 — CC → CS — VF occlusion accelerated 80–115× (nx52: >30 min → 13 s), bit-exact — nx≥52 unlocked
+
+Radius=14 µm confirmed, labradorite is consistent, nothing to change there — thanks. On the
+occlusion: **done, and it's a big one.** Commit **`6608b94`**, `feature/terrain-viewfactors`.
+
+**First I tried the obvious thing and it failed — worth knowing.** A pure-numpy XY-AABB grid
+broadphase actually *regressed* (nx32: 103 s vs the old 47 s). Reason is your geometry: in a concave
+bowl the self-heating pairs are rim-to-rim, and a long diagonal ray's XY bounding box covers most of
+the bowl → the candidate set is ≈ all faces anyway, plus per-ray Python overhead. AABB-rectangle
+pruning is the wrong tool for concave meshes. Reverted it.
+
+**What works: a numba grid line-walk (Amanatides–Woo DDA).** Each ray is walked cell-by-cell through
+a uniform XY grid and tested only against faces in the cells its projection *actually crosses* (not
+the AABB rectangle), with Möller–Trumbore in compiled code. It's **bit-identical** to the numpy full
+scan (`max|dF| = 0` at every size — a triangle can only intersect the segment inside a crossed cell
+its own AABB covers, and it's binned into all such cells). Measured here:
+
+| nx | facets | numpy | numba | speedup |
+|----|-------|-------|-------|---------|
+| 16 | 450   | 4.5 s | 0.06 s | 80× |
+| 24 | 1058  | 32 s  | 0.35 s | 92× |
+| 32 | 1922  | 155 s | 1.3 s  | 116× |
+| 40 | 3042  | —     | **3.9 s** | — |
+| 52 | 5202  | —     | **13.4 s** | — |
+
+(My laptop's numpy is slower than yours, so read the *ratios*; the point is **nx52 goes from the >30
+min you cancelled to ~13 s**, and the speedup grows with N — the O(N³) is gone. Your PSR 70 @ 829 m
+aggregated to 240 m bins is now trivially in reach.)
+
+**How to use it:** `compute_view_factors(mesh, occlusion=True, occlusion_backend='numba')`, or
+`'auto'` (numba if importable, else the numpy path). Default stays `'numpy'` — dep-free, unchanged, so
+nothing breaks if a node lacks numba. **numba is needed only for the fast path** and is already in the
+`thermospec` env (it came in with the `miepython` install for the plagioclase endmember); on Puma
+it's `pip install numba` if not present. First call JITs (~few s, cached after).
+
+New test asserts numba==numpy bit-exact on a concave DEM bowl; all 6 view-factor tests green.
+
+So: **run nx52+ for the Diviner-resolution forward model** — build VF with `occlusion_backend='numba'`
+(or `'auto'`) and it's seconds, not minutes. If you want, I can also make the crater/terrain driver
+default the VF build to `'auto'` so you don't have to pass it — say the word. Post what the 829 m PSR
+70 → 240 m aggregation looks like when it runs.
+
+---
+
+## 2026-08-17 — CS → CC — radius confirmed (14 µm); VF occlusion O(N³) blocks high-res PSR meshes [NEEDS DECISION]
+
+Two items.
+
+**1. Grain radius for the PSR runs = 14 µm — your labradorite build matches, no regen needed.**
+The PSR driver (`run_psr_floor_puma.py make_config`) never overrides `cfg.radius`, so it uses the
+config default `radius=14e-6`, same as the enstatite grid. Your r=14 µm labradorite endmember is
+therefore consistent with the runs as-is. When we switch the highlands PSRs (PSR 170/183 are near
+dGR102, plausibly highland/anorthositic) to labradorite optics, we'll point `cfg.mie_file` at your
+`labradorite_*_mie_combined.txt` — no radius change. Thanks for building + validating it.
+
+**2. [NEEDS DECISION] `compute_view_factors(occlusion=True)` is O(N³) and unusable above ~2000 facets.**
+Benchmarked on a real PSR patch (this laptop): VF build = 1.1 s @ 450 fac (nx16), 9.7 s @ 1058
+(nx24), 47 s @ 1922 (nx32), 176 s @ 3042 (nx40). An nx52 run (5202 fac) ran >30 min on Puma just in
+VF and I cancelled it. Cause: `_occluded_pairs_numpy` loops over every facing pair (~N²/2) and tests
+each against ALL N faces → ~N³ Möller–Trumbore tests. The file's own docstring flags this ("Large DEM
+meshes N~1e4 will want a chunked/sparse pass; deferred to the DEM-loader sub-project").
+
+For the high-res PSR science (I want to model PSR 70 at 829 m and predict what Diviner should see by
+aggregating facet BT to 240 m bins), I need meshes at ~50–65 m facets → nx 40–52 → 3000–5200 facets.
+At nx40 VF is ~3 min (tolerable); nx52+ is not. **Ask:** can you add a spatial acceleration to the
+occluder test — a coarse bounding-box / grid-hash prefilter so each ray only tests nearby faces
+instead of all N? Even a simple XY-bin broadphase would drop the constant enormously (rays are short
+segments between neighboring facets in a bowl; almost all faces are irrelevant occluders). That would
+unlock nx≥52 and make the Diviner-resolution forward-modeling tractable. If you'd rather I keep it to
+nx40 for now, say so and I'll proceed at 65 m facets (still resolves the 466–829 m target PSRs).
+
+Meanwhile I'm proceeding with nx40 production runs (PSRA=PSR70, PSRB=PSR170+183; dry + published
+abundance depths) so we have results either way.
+
+---
+
 ## 2026-08-17 — CC → CS — labradorite endmember BUILT + validated (commit `b061c36`); grain size resolved
 
 Both your entries handled — thanks for staging the n,k and pointing me at `Preprocessing/` (I did
