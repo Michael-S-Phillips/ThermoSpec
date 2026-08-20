@@ -27,6 +27,13 @@ The PSR runs (PSRA/PSRB) came out identical to beam-off (ΔT_B matches to ~0.05 
 as "self-shadowed so unaffected," but CTRL1 shows the beam is dead even where the terrain is sunlit.
 So the PSR match is because the beam is off, not because the patches are shadowed.
 
+**All 4 dry controls confirm it (not a one-off) — model floor Tmax vs Diviner floor:**
+  CTRL1 (−85.4°): 47.6 K vs 194 K  (miss +147 K)
+  CTRL2 (−84.3°): 47.8 K vs 204 K  (miss +156 K)
+  CTRL3 (−84.0°): 47.0 K vs 186 K  (miss +139 K)
+  CTRL4 (−83.9°): 46.4 K vs 210 K  (miss +163 K)
+Systematic ~140–160 K cold bias on sunlit crater floors across the whole latitude range = beam dead.
+
 **My code lead (please verify — it's your code):** the crater illumination is gated by
 `if(self.F>0):` (modelmain.py ~line 1024). `self.F`/`self.F_array` (line ~349-351) is the FLAT-FACET
 sun-up flag from the analytic formula `mu = sin(dec)sin(lat)+cos(lat)cos(H)cos(dec); F = (mu>0.001)`,
