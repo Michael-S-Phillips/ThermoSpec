@@ -373,6 +373,16 @@ class Simulator:
 							"sun_vectors must have shape [%d, 3] as (north, east, up); got %s"
 							% (len(self.t), sv.shape))
 					self.sun_x, self.sun_y, self.sun_z = sv[:, 0], sv[:, 1], sv[:, 2]
+					# The injected sun is authoritative: derive the sun-up flag F and incidence
+					# cosine mu from it (up-component = cos solar-zenith in the mesh frame) instead
+					# of leaving the analytic flat-facet values from cfg.dec/latitude. Otherwise the
+					# crater beam guard `if self.F>0` (and the smooth-surface mu/F) stay tied to a
+					# separate sun model that, at polar latitudes, is ~all-zero exactly when the
+					# injected sun is up -- so illuminated_facets/Q_direct never run and sunlit
+					# floors freeze cold (the beam-dead bug, HANDOFF 2026-08-20). Reduces to the
+					# analytic path exactly when the analytic vectors are fed back (sun_z == mu).
+					self.mu_array = self.sun_z.copy()
+					self.F_array = (self.sun_z > 0.001).astype(float)
 			else:
 				# Non-diurnal: fixed sun position (stored as scalars)
 				if(self.cfg.sun):

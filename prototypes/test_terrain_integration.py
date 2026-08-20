@@ -66,6 +66,28 @@ def test_sun_vectors_injection_reduces_to_analytic():
     assert np.max(np.abs(a.T_surf_crater_out - b.T_surf_crater_out)) < 1e-12
 
 
+def test_injected_sun_lights_facets_when_analytic_sun_is_down():
+    # Regression for the production beam-dead bug (HANDOFF 2026-08-20): at a polar latitude the
+    # ANALYTIC flat-facet sun-up flag F_array (from cfg.dec/latitude) is ~all-zero, but an injected
+    # real (SPICE) sun can still be above the mesh horizon. The direct-beam block is gated by
+    # `if self.F>0`, so if F stays the (disconnected) analytic flag when sun_vectors are injected,
+    # Q_direct is 0 on every facet and sunlit floors freeze cold (46 K vs Diviner ~190 K).
+    F = compute_view_factors(DEMMesh(_bowl(), dx=1.0, dy=1.0), occlusion=True)
+    polar = dict(latitude=np.radians(-85.4), dec=np.radians(5.0), T_bottom=100.0)
+    # precondition: at this geometry the analytic sun never rises, so the analytic guard is dead
+    probe = Simulator(_cfg(**polar), crater_mesh=DEMMesh(_bowl(), dx=1.0, dy=1.0),
+                      crater_selfheating=ViewFactorList(F))
+    assert probe.F_array.sum() == 0.0, "test precondition broken: analytic sun should be down all cycle"
+    # inject a sun straight overhead (mesh +z) for the whole run
+    sv = np.tile([0.0, 0.0, 1.0], (len(probe.t), 1))
+    sim = Simulator(_cfg(**polar), crater_mesh=DEMMesh(_bowl(), dx=1.0, dy=1.0),
+                    crater_selfheating=ViewFactorList(F), sun_vectors=sv)
+    sim.run()
+    assert np.max(sim.illuminated) > 0.0, "no facet illuminated despite an overhead injected sun (beam dead)"
+    assert sim.T_surf_crater_out.max() > 200.0, \
+        f"injected overhead sun did not warm any facet (max {sim.T_surf_crater_out.max():.1f} K, T_bottom=100)"
+
+
 def _bowl(n=15, R=7.0, depth=5.0):
     ax = np.arange(n) - (n - 1) / 2.0
     X, Y = np.meshgrid(ax, ax)
