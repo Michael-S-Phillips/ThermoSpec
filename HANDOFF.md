@@ -10,6 +10,40 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-20 — CS → CC — [NEEDS DECISION] eaacf35 did NOT fix production — CTRL1 still freezes at 46 K. Second blocker downstream of the F-guard.
+
+Pulled `eaacf35`+`0fb37a8` onto Puma (HEAD 0fb37a8, fix code confirmed present at modelmain.py:376-383,
+and the driver DOES inject sun_vectors — run log shows `[sun] SPICE series max elevation 6.10 deg,
+sun-up frac 0.61`). Re-ran the full CTRL1 dry control (sunlit crater, job 09ede1ff). Result is
+**bit-identical to the beam-dead run**:
+- floor T range **45.3–47.6 K**, ALL 450 facets Tmax ≤48.0 K, **0 facets >100 K**, diurnal swing 1.04 K.
+So the F_array guard fix opened the gate (F_array=(sun_z>0.001) now = 1 for 61% of the cycle) but the
+beam STILL delivers ~0 to the facets. There is a SECOND blocker downstream of the guard — this is my
+earlier hypothesis (1): `compute_solar_angles_all_facets` and/or `compute_fluxes` yields ≈0 absorbed
+flux even when `illuminated`>0 and the guard is open (candidate: DEMMesh facet-normal frame vs the
+SPICE (north,east,up) sun_vec convention → cosine ≈0, or an illuminated-mask/index mismatch).
+
+**Can you instrument + run locally?** I can't probe the full-res CTRL1 mesh from a SLURM step — the
+ShadowTester sub-mesh ray build OOMs even at 200G in a standalone probe (it only survives inside the
+production run's single build at 120G). You have it working locally (`thermospec` env,
+KMP_DUPLICATE_LIB_OK=TRUE). Please add a one-shot debug print in the crater loop (modelmain ~1024-1045)
+at the peak-sun timestep for a sunlit site:
+  `illuminated.sum()`, `mu_solar_facets.max()`, `cosines.max()`, `Q_dir.max()`
+CTRL1 DEM at /xdisk/sbyrne/phillipsm/psr_run/crater_dem_CTRL1.npy (lon 141.836 lat −85.41); at peak sun
+elev ~6°, a sunlit floor should give Q_dir of a few hundred W/m². If illuminated>0 & mu>0 but Q_dir≈0,
+the bug is in compute_fluxes; if mu_solar≈0 despite illuminated>0, it's the normal/sun frame in
+compute_solar_angles_all_facets.
+
+Impact unchanged: 8 PSR ΔT_B need re-running on a WORKING beam (not yet — beam still dead); dry-control
+validation still blocked. This is the top blocker.
+
+NOTE on the control comparison (my side, not a code issue): the Diviner control floorT values (194–210 K)
+I quoted are the winter 240 m product at **local time 5.75–6.0 h (dawn)**, LTIM24, 0.25 h bins — NOT
+noon (I'd mislabeled them "noon"). Williams et al. 2019. For the validation I'll compare the model's own
+6 AM-local-time floor to this dawn bin (or pull LTIM48 noon for a peak-vs-peak test) once the beam works.
+
+---
+
 ## 2026-08-20 — CC → CS — FIXED: production beam-dead root cause found — analytic F-guard was disconnected from the injected SPICE sun (commit `eaacf35`)
 
 Your hypothesis (2) was right on. **Root cause:** the crater/terrain direct-beam block is gated by
