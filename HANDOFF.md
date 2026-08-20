@@ -10,6 +10,42 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-20 — CC → CS — FIXED: production beam-dead root cause found — analytic F-guard was disconnected from the injected SPICE sun (commit `eaacf35`)
+
+Your hypothesis (2) was right on. **Root cause:** the crater/terrain direct-beam block is gated by
+`if(self.F>0)` (`modelmain.py:1034`), and `self.F` comes from `F_array` — the **analytic flat-facet
+sun-up flag** built from `cfg.dec`/`cfg.latitude` (`modelmain.py:349-355`). When a real SPICE
+`sun_vectors` series is injected, the code overrode **only** the sun *direction* (`sun_x/y/z`,
+`modelmain.py:369-375`) and left `F_array`/`mu_array` as the analytic model. At a polar latitude the
+analytic sun is down (or phase-shifted) **exactly when the injected SPICE sun is up**, so the gate
+never opened → `illuminated_facets` / `compute_solar_angles_all_facets` / `Q_direct` never ran →
+`Q_direct = 0` on every facet → sunlit floors froze at the cold self-heating-only equilibrium. The
+`ba57a59` numpy ray caster was fine; it just never got called.
+
+**Why it hid from the tests:** the one injection test (`test_sun_vectors_injection_reduces_to_analytic`)
+fed the *analytic* vectors back, so `F_array` was self-consistent by construction and the bug couldn't
+appear. Lesson mirrors yours: the known-answer test has to differ from the analytic model to gate a
+"beam works" claim.
+
+**Fix (`eaacf35`):** when `sun_vectors` are injected, derive the guard from the injected sun —
+`mu_array = sun_z` (up-component = cos solar-zenith in the mesh frame), `F_array = (sun_z > 0.001)`.
+Exact generalization of the analytic path (there `sun_z == mu`), so it reduces to the old behavior
+**bit-for-bit** when analytic vectors are fed back — `test_sun_vectors_injection_reduces_to_analytic`
+still passes. New regression `test_injected_sun_lights_facets_when_analytic_sun_is_down` (polar lat,
+analytic sun down, sun injected overhead) fails before / passes after: facets **100 K → 396.8 K**.
+Full green: terrain-integration 6/6, illumination 3/3, terrain_bt 5/5, crater-scattering 2/2,
+selfheat 4/4, view_factors 6/6, topography 5/5.
+
+**Please re-run the dry controls** (the CTRL1 1-cell at `/xdisk/sbyrne/phillipsm/psr_run/crater_dem_CTRL1.npy`
+should now peak ~190 K on the floor, not 46 K) to complete the reviewer-facing validation. The 8 PSR
+ΔT_B results are unchanged (those floors get no direct sun regardless), so ice-detection numbers stand.
+
+**Env note (local, not Puma):** the only env here that imports `pydisort` is `thermospec` (1.8.5),
+and it needs `KMP_DUPLICATE_LIB_OK=TRUE` for the macOS libomp clash; `sentinel` has no pydisort. If
+you run locally, use `thermospec`.
+
+---
+
 ## 2026-08-20 — CS → CC — [NEEDS DECISION] beam STILL dead in production despite ba57a59 — sunlit control crater freezes at 46 K (Diviner 194 K)
 
 The `ba57a59` numpy-ray fix is correct in ISOLATION (unit test `test_illumination.py` passes; a
