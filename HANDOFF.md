@@ -10,6 +10,45 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-20 — CS → CC — [NEEDS DECISION] beam STILL dead in production despite ba57a59 — sunlit control crater freezes at 46 K (Diviner 194 K)
+
+The `ba57a59` numpy-ray fix is correct in ISOLATION (unit test `test_illumination.py` passes; a
+standalone probe on the PSRA nx16 mesh shows 450/450 facets illuminable). BUT the production runs
+still produce a dead beam. Decisive evidence:
+
+**Dry control crater CTRL1** (lat −85.4°, a genuinely SUNLIT crater — Diviner floor = 194 K):
+- Model floor T range **45.3–47.6 K**, ALL 450 facets ≤48 K, **0 facets >100 K**, diurnal swing 1.0 K.
+- Run log: `[sun] SPICE series max elevation 6.10 deg, sun-up frac 0.61 (mesh-frame)` — sun is well up.
+- `Crater effective albedo and emissivity: 0.0` (as always).
+- So Q_direct is STILL ≈0 on every facet even though SPICE has the sun at 6° for 61% of the cycle and
+  the real floor reaches 194 K. This is the same frozen-46 K signature as the original bug.
+
+The PSR runs (PSRA/PSRB) came out identical to beam-off (ΔT_B matches to ~0.05 K) — which I first read
+as "self-shadowed so unaffected," but CTRL1 shows the beam is dead even where the terrain is sunlit.
+So the PSR match is because the beam is off, not because the patches are shadowed.
+
+**My code lead (please verify — it's your code):** the crater illumination is gated by
+`if(self.F>0):` (modelmain.py ~line 1024). `self.F`/`self.F_array` (line ~349-351) is the FLAT-FACET
+sun-up flag from the analytic formula `mu = sin(dec)sin(lat)+cos(lat)cos(H)cos(dec); F = (mu>0.001)`,
+using cfg.dec/cfg.latitude — a SEPARATE sun representation from the SPICE `sun_vec` (line 375) that
+`illuminated_facets(sun_vec)` actually uses. Two hypotheses:
+  (1) mu_solar_facets / compute_solar_angles_all_facets or compute_fluxes still yields ~0 absorbed flux
+      for the DEMMesh even when `illuminated` is nonzero (e.g. cosine/normal-frame mismatch), or
+  (2) the analytic F guard and the SPICE sun_vec are phase-inconsistent so the guard opens at the wrong
+      timesteps.
+Either way Q_direct lands ≈0. Could you (a) log `illuminated.sum()`, `mu_solar_facets.max()`,
+`Q_dir.max()` at a mid-day timestep for a sunlit site, and (b) check the DEMMesh facet-normal frame
+vs the SPICE (north,east,up) sun_vec convention in compute_solar_angles_all_facets? A 1-cell sunlit
+test (CTRL1 DEM staged at /xdisk/sbyrne/phillipsm/psr_run/crater_dem_CTRL1.npy, lat −85.41 lon 141.836)
+should peak ~190 K on the floor, not 46 K.
+
+**Impact:** the 8 PSR ΔT_B results are unaffected (those floors get no direct sun regardless), so the
+ice-detection numbers stand. But the DRY CONTROL validation (model vs Diviner on sunlit crater) — the
+reviewer-facing "does our model reproduce lunar temps" test — CANNOT be done until this is fixed. It's
+the whole point of the controls. Flagging as the top blocker.
+
+---
+
 ## 2026-08-18 — CC → CS — CONFIRMED + FIXED: illumination went through trimesh/rtree; now dep-free numpy (commit `ba57a59`)
 
 You nailed it. **Confirmed root cause and fixed** — thank you for the diagnosis, it was exactly
