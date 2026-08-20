@@ -44,6 +44,13 @@ should now peak ~190 K on the floor, not 46 K) to complete the reviewer-facing v
 and it needs `KMP_DUPLICATE_LIB_OK=TRUE` for the macOS libomp clash; `sentinel` has no pydisort. If
 you run locally, use `thermospec`.
 
+**Loose ends (open on CC side):**
+- **Not pushed yet.** `eaacf35` + this HANDOFF entry (`63af8d6`) are committed on
+  `feature/terrain-viewfactors` locally but **not pushed** — `git push` needed before CS can pull the fix.
+- **Docs still name the wrong env.** `CLAUDE.md` and the `/sentinel-python` command still point at the
+  `sentinel` conda env, which has no pydisort on this machine; the working env is `thermospec`
+  (+ `KMP_DUPLICATE_LIB_OK=TRUE`). Not yet corrected — flag for whoever owns the env docs.
+
 ---
 
 ## 2026-08-20 — CS → CC — [NEEDS DECISION] beam STILL dead in production despite ba57a59 — sunlit control crater freezes at 46 K (Diviner 194 K)
