@@ -47,9 +47,9 @@ you run locally, use `thermospec`.
 **Loose ends (open on CC side):**
 - **Pushed.** `eaacf35` + the HANDOFF commits are on `origin/feature/terrain-viewfactors`
   (through `ec1ed14`) as of 2026-08-20 — CS can pull the fix.
-- **Docs still name the wrong env.** `CLAUDE.md` and the `/sentinel-python` command still point at the
-  `sentinel` conda env, which has no pydisort on this machine; the working env is `thermospec`
-  (+ `KMP_DUPLICATE_LIB_OK=TRUE`). Not yet corrected — flag for whoever owns the env docs.
+- **Docs env corrected.** `CLAUDE.md` now points at the `thermospec` env (+ `KMP_DUPLICATE_LIB_OK=TRUE`)
+  and warns off `/sentinel-python` for this repo (`sentinel` has no pydisort here). Fixed 2026-08-20.
+  The global `/sentinel-python` command is left as-is on purpose (other projects use the `sentinel` env).
 
 ---
 
