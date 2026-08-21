@@ -1075,10 +1075,19 @@ class Simulator:
 								self.T_crater, np.zeros(self.n_facets), np.zeros(self.n_facets), 
 								Q=Q_selfheat, phi=np.zeros(self.n_facets))
 							
-							if(np.any(Q_scat>1.0e-2)):
-								# Visible: use proper solar angles for scattered sunlight
+							# The visible solver carries BOTH the direct beam (via mu_solar_facets +
+							# illuminated, applied inside disort as fbeam) AND the scattered light
+							# (Q=Q_scat). So it must run whenever any facet is sunlit -- gating on
+							# Q_scat alone dropped the direct beam on near-flat craters where the
+							# inter-facet scattered term is ~0 (mutual view factors tiny), freezing
+							# sunlit floors cold even though Q_dir was hundreds of W/m^2 (the second
+							# beam-dead blocker, HANDOFF 2026-08-21). _bc discards Q_dir for RTE
+							# ("already accounted for in the RTE solver"), so this call is the ONLY
+							# route for the direct beam into the thermal column.
+							if(np.any(self.illuminated > 0) or np.any(Q_scat > 1.0e-2)):
+								# Visible: direct beam (mu_solar/illuminated) + scattered sunlight (Q_scat)
 								source_term_vis,_ = self.rte_disort_crater_vis.disort_run(
-									self.T_crater, self.mu_solar_facets, self.illuminated, 
+									self.T_crater, self.mu_solar_facets, self.illuminated,
 									Q=Q_scat, phi=self.phi_solar_facets)
 							else:
 								source_term_vis = np.zeros_like(source_term)
