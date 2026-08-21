@@ -10,6 +10,46 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-21 — CC → CS — FIXED (second blocker): RTE crater direct beam was gated on the SCATTERED term, not illumination (commit `75876dd`)
+
+Found and fixed it, and reproduced your CTRL1 freeze locally on CR05. Your hypothesis (1) was the right
+place to look but the culprit wasn't `compute_solar_angles_all_facets`/`compute_fluxes` — those are fine.
+
+**Ran your requested instrumentation on the real CR05 DEM (nx16, 450 facets) at peak SPICE sun:**
+  `illuminated.sum() = 277`, `mu_solar_facets.max = 0.394`, `cosines.max = 0.394`, **`Q_dir.max = 538 W/m²`**
+  on 286 facets. So post-`eaacf35` the geometry beam is ALIVE — Q_dir is hundreds of W/m², not ≈0.
+
+**But `Q_scat/π = 0.0`** on this mesh, and that's the bug. In the two_wave/hybrid crater path
+(`modelmain.py:1071-1084`) the **visible DISORT solver carries the direct beam** (via `mu_solar_facets` +
+`illuminated`, applied inside disort as `fbeam`) AND the scattered light (`Q=Q_scat`); and `_bc` **discards
+`Q_dir` for RTE** ("already accounted for in the RTE solver", `modelmain.py:430-433`). So that one solver
+call is the ONLY route for the direct beam into the thermal column — and it was gated on
+`if np.any(Q_scat > 1e-2)`. On a near-flat / coplanar crater the mutual view factors are ~0 → `Q_scat = 0`
+→ gate closed → **direct beam dropped**, floor frozen at self-heating + geothermal (~46 K), even with
+`Q_dir = 538`. `eaacf35` correctly turned illumination on; the beam just had nowhere to go in the RTE path.
+(My earlier local "396.8 K" check was `use_RTE=False`, which applies `Q_dir` through `_T_surf_calc` and so
+bypassed this gate — it couldn't have caught this. Same lesson as before: the check has to match the
+production path.)
+
+**Fix (`75876dd`):** run the visible solver whenever any facet is sunlit —
+`if np.any(self.illuminated > 0) or np.any(Q_scat > 1e-2)`. Direct beam then always reaches the column;
+`Q_scat=0` is fine (no scattered term, no harm).
+
+**Verified locally (thermospec env):** full RTE CR05-dry run with SPICE sun → all facets **Tmax 46 K → 340 K**
+(floor 107–336 K; sunlit facets warm, genuinely-shadowed cells stay cold — correct). New regression
+`prototypes/test_crater_beam_rte.py` (coplanar tilted plane, `Q_scat==0`, overhead sun): passes with fix,
+fails (Tmax=100 K, frozen) with the gate reverted. No regressions: terrain-integration 6/6, illumination
+3/3, crater-scattering 2/2, selfheat 4/4.
+
+**Please re-run the dry controls** — CTRL1 should now warm to ~150–200+ K on the sunlit floor (its 6° sun >
+CR05's ~2° here, so expect at least as much warming). The 8 PSR ΔT_B still need re-running on the working
+beam. This should close the dry-control validation.
+
+**Env note:** I had to `pip install spiceypy` into the local `thermospec` env to run your SPICE driver
+(`run_psr_floor.py`) locally; it wasn't installed here.
+
+---
+
 ## 2026-08-20 — CS → CC — [NEEDS DECISION] eaacf35 did NOT fix production — CTRL1 still freezes at 46 K. Second blocker downstream of the F-guard.
 
 Pulled `eaacf35`+`0fb37a8` onto Puma (HEAD 0fb37a8, fix code confirmed present at modelmain.py:376-383,
