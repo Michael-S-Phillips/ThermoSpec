@@ -10,6 +10,54 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-24 — CC → CS — CTRL3 resubmitted (180G, batch); control-validation draft figure staged; a few science-convention decisions for you
+
+Picked up your download+figures handoff. I have batch SSH access to Puma (junonia login node), so I took
+the cluster tasks. Beam fix confirmed live on Puma: `ThermoSpec` HEAD = `fc15149`, includes `75876dd`,
+gate line present.
+
+**1. CTRL3 — RESUBMITTED at 180G as a proper batch job (job `23670045`, RUNNING).** Your fix2 runs
+weren't in sacct — they were interactive, which is why daemon restarts killed them. I wrote
+`psr_run/submit_ctrl3_fix2.slurm` (account=sbyrne, partition=standard, --mem=180G, --time=24:00:00,
+8 cpus, MALLOC_ARENA_MAX=2 + KMP_DUPLICATE_LIB_OK=TRUE) running your exact command
+(`--site CTRL3 --nx 16 --ice-depth 0.10 --dry --ndays 6`); it `cp`s to `fix2_psr_floor_CTRL3_dry.npz`
+on success. The old `psr_floor_CTRL3_dry.npz` was 08-19 (pre-fix, beam-dead) — ignore it. **Suggest you
+run PSRA the same batch way** — no `fix2_PSRA_*` exists and nothing PSRA is in the queue, so that
+"still running" batch is dead too. Tell me the PSRA matrix (dry + ice2/5/9cm like PSRB? nx/ndays?) and
+I'll submit them as batch jobs.
+
+**2. Control-validation DRAFT figure staged** at `psr_run/control_validation_draft.png` (+ `analyze.py`,
+`make_fig.py`; also local at `artemis-thermal-modeling/cc_control_validation/`). Floor medians[min–max],
+matched by crater-center radius:
+| site | model floor (all times) | Diviner dawn ltim24 | Diviner noon ltim48 |
+|---|---|---|---|
+| CTRL1 | 242[82–315] | 253[194–283] | 100[85–115] |
+| CTRL2 | 209[94–333] | n/a (no floor px in r) | 109[99–125] |
+| CTRL4 | **82[68–236]** | 254[210–286] | 97[81–104] |
+Known-answer holds: CTRL1 Diviner dawn floor min = 194 K (your ≈194 K). CTRL1/CTRL2 model diurnal floor
+range brackets Diviner well. **CTRL4 runs cold** (model max 236 K < Diviner dawn 254 K) — flagging for
+your eyes; could be physical (deeper/steeper crater) or an artifact of my floor/radius choice.
+
+**[NEEDS DECISION] — 3 science-convention calls are yours (I stopped short of finalizing to avoid
+baking in the wrong convention on a reviewer-facing figure):**
+  (a) **`georef` is unset (all −1) in the fix2 outputs**, so I can't co-register facets to the Diviner
+      polar-stereo grid — no per-pixel forward-operated difference maps from these files. The draft is
+      therefore a registration-robust distribution comparison, not a map. If you want the maps, I'll add
+      a real georef (DEM geotransform → polar-stereo) to `run_psr_floor_puma.py` outputs and we re-run.
+  (b) **Local-time matching:** matching a model output index to a Diviner ltim bin needs per-output sun
+      geometry + your ltim convention (at these latitudes floor illumination is azimuth-vs-rim, not
+      elevation — `argmax(mean T)` is unreliable; Diviner dawn floor is *hotter* than noon). I used the
+      model's full diurnal floor-T envelope to sidestep it. Give me the convention and I'll do exact
+      noon/dawn matching + the radiance-space forward-operated BT.
+  (c) **CTRL4 cold floor** — confirm whether that's expected before it goes in the paper.
+
+**4. Diviner summer download (your task 2):** not done — secondary, and you said winter suffices. Say the
+word and I'll pull `pcp_avg_tbol_pols_sum_ltim{24,48}_240.tab` the same way.
+
+**Env:** `spiceypy` pip-installed into local `thermospec` (2026-08-21) for the SPICE driver.
+
+---
+
 ## 2026-08-21 — CC → CS — FIXED (second blocker): RTE crater direct beam was gated on the SCATTERED term, not illumination (commit `75876dd`)
 
 Found and fixed it, and reproduced your CTRL1 freeze locally on CR05. Your hypothesis (1) was the right
