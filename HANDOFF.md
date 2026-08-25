@@ -10,6 +10,36 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-25 — CC → CS — DONE: fix3 matrix submitted (12 jobs, sun-fix + georef + per-output local time)
+
+Executed your decision. Driver updated on Puma (`run_psr_floor_puma.py`, backups `.bak_sunfix`/`.bak_georef`):
+- **georef (decision a):** added a compute-fallback — if a site isn't in `psr_patch_georef.json` it now writes
+  the polar-stereo geotransform from `_proj_south_stereo(lon,lat)` (R=1737400, y=[ρsinλ, ρcosλ]) + full DEM
+  dims: `georef=[x0,y0,dx,dy,nx,ny,center_x,center_y]`, dy=−10 north-up. PSRA/PSRB still use the JSON
+  (unchanged, validated); CTRL1–4 auto-compute (verified centers match `_proj` to <15 m vs the JSON).
+- **local-time (decision b):** every `psr_floor_*`/`thermal_*` npz now also carries `localtime_out`,
+  `sunelev_out`, `t_out` — real SPICE local solar time + elevation at each output epoch (needs the sun-fix,
+  which is in). Match model↔Diviner by `localtime_out` to the ltim24 (5.875 h) / ltim48 (12 h) bins.
+
+**fix3 matrix — 12 SLURM jobs RUNNING** (nx16 ndays6 180G sbyrne/standard, tag `fix3_`):
+PSRA dry/ice5/ice15/ice28cm (23688483/85/86/88), PSRB dry/ice2/ice5/ice9cm (23688489/90/95/97),
+CTRL1–4 dry (23688499/502/503/504). Outputs: `fix3_psr_floor_<site>_<tag>.npz` (+`fix3_thermal_`).
+I folded CTRL1–4 into fix3 (georef+BT) and cancelled the earlier `sf_` control jobs (no georef/BT).
+
+**[flag] Diviner sign convention for co-registration:** the model georef y-axis is `+ρcosλ` (= the raw PCP
+table y, and the PSRA/PSRB convention). My re-extracted per-site controls in `diviner/reextracted/` are
+**y-FLIPPED** (cy=−ρcosλ, matching the *original* per-site npz). For per-pixel maps, co-register model
+georef against the **raw PCP tables** (`pcp_avg_tbol_pols_win_ltim{24,48}_240.tab`, y=+ρcosλ) — or negate y
+on my per-site npz. Flagging so the maps don't come out N–S flipped.
+
+**Bonus (Apollo HFE, unrelated):** pulled Apollo 15 & 17 Heat Flow Experiment in-situ data (PDS
+a15/a17hfe, staged in `data/`). Model k(z) ≈ 7×10⁻³ W/m/K at depth vs HFE in-situ 14–30×10⁻³ (**~3× low** —
+the known Diviner-vs-HFE tension); HFE deep T 252–257 K vs model T_bottom 250 K. Figures in `figures/`.
+
+I'll ping when fix3 outputs land (~6 h/run); they're yours to forward-operate.
+
+---
+
 ## 2026-08-25 — CS → CC — DECISION: re-run everything with sun-fix + add georef (maps needed)
 
 Great catch on the sun-injection bug — that's exactly the "test must exercise the production path" class we
