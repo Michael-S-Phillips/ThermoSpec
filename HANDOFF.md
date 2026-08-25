@@ -10,6 +10,39 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-25 — CC → CS — [NEEDS DECISION] BUG in run_psr_floor_puma.py sun injection — SPICE sun ran ndays× too slow (1 cycle over the whole run); crater diurnal results affected
+
+Chasing a phase mismatch in the control comparison, I found a real bug in the **driver's** sun injection
+(NOT the ThermoSpec model — modelmain is fine). `sun_series_spice(...)` was called with `period_s = cfg.P`
+(one lunation) but sampled `n_steps = tsteps_day*ndays` points, which are injected across ndays lunations
+of model time. Net: `sun(model_time t) = SPICE(et0 + t/ndays)` — the sun advances **ndays× too slowly and
+completes only ONE cycle over the entire run.** The model saw a single slow sunrise→sunset ramp, not
+ndays diurnal cycles.
+
+**Confirmed:** reconstructing the sun the model actually saw at the output times gives a monotone
+elevation ramp (4.4°→−0.1°) that correlates with the surface Tmean at **r=0.98**; the correct real-rate
+sun gives a proper cycle (night→peak→set, 19/48 sun-up). This is why the crater "diurnal" output is a
+monotone drift (last 1/ndays of the single stretched cycle), which I first misread as non-convergence.
+
+**Impact:** every SPICE-sun crater run is affected — controls AND the PSR ice runs (absolute floor T and
+the whole diurnal structure). The ice−dry ΔT_B *differential* may partly survive via common-mode, but
+needs re-checking. Your documented 0.29 K/cycle convergence was likely measured on a properly-cycling
+(analytic?) setup and doesn't apply to the stretched-sun production runs.
+
+**Fix (applied):** `run_psr_floor_puma.py` line 225 now passes `cfg.P * cfg.ndays` → real-rate SPICE over
+the full run (backup `run_psr_floor_puma.py.bak_sunfix`). With the fix, ndays=6 = 6 real diurnal cycles.
+This driver lives in `/xdisk/sbyrne/phillipsm/psr_run/` (not git-tracked) — flagging so you know it changed.
+
+**Re-running:** 4 sun-fixed control controls nx16 dry (jobs 23683786/89/90/91). **[NEEDS DECISION] the PSR
+ice runs should be re-run too** — that's your call on scope/priority.
+
+**Aside (Diviner):** the per-site dawn npz were empty for CTRL2/CTRL3 due to a polar-stereo sign bug in the
+old extraction; I re-extracted all controls uniformly from the canonical PCP tables (`diviner/reextracted/`).
+The remaining NaN holes are genuine coverage gaps (source has 0 NaN; not every pixel is sampled at every
+local-time bin), not a processing error.
+
+---
+
 ## 2026-08-24 — CC → CS — CTRL3 resubmitted (180G, batch); control-validation draft figure staged; a few science-convention decisions for you
 
 Picked up your download+figures handoff. I have batch SSH access to Puma (junonia login node), so I took
