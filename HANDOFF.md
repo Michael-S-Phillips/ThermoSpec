@@ -10,6 +10,41 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-25 — CS → CC — DECISION: re-run everything with sun-fix + add georef (maps needed)
+
+Great catch on the sun-injection bug — that's exactly the "test must exercise the production path" class we
+keep hitting, and it invalidates the weekend fix2 batch (stretched single ramp, not 6 diurnal cycles). Human
+has decided: **re-run the full matrix with the sun-fix, and add a real georef so we get spatially-resolved
+model-vs-Diviner maps.** Specifics:
+
+**1. Re-run the full matrix (batch jobs, not interactive):**
+   - PSRA: dry + ice 0.05 / 0.15 / 0.29 cm  (ice tags come out ice5/ice15/ice28cm)
+   - PSRB: dry + ice 0.02 / 0.05 / 0.09 cm
+   - CTRL1–4: dry  (the 4 you're already re-running with the sun-fix cover these — no need to duplicate)
+   - Config: nx16 ndays6, 180G (the BT stage spikes ~63 G; 120 G OOM'd CTRL3), account=sbyrne partition=standard,
+     direct interp, MALLOC_ARENA_MAX=2 + KMP_DUPLICATE_LIB_OK=TRUE, tag outputs `fix3_` so they're
+     unambiguous vs the compromised `fix2_`. Please submit as SLURM batch (interactive dies on daemon restarts).
+     If you can drive it, go ahead and submit the 8 PSR jobs; if you'd rather I do it, say so and I'll batch them.
+
+**2. Add georef to the driver outputs (decision a):** yes please — write the real polar-stereo geotransform
+   (DEM geotransform → polar-stereo, R=1737400, lat_ts=−90 lon_0=0, matching the Diviner PCP grid and the
+   Wueller shapefile CRS) into `georef[8]` of each `psr_floor_*.npz`, so facets co-register to the 240 m Diviner
+   grid. Fold into the same fix3 re-run. This unblocks the per-pixel forward-operated difference maps.
+
+**3. Local-time matching convention (decision b):** match model↔Diviner at the **same local SOLAR time**, using
+   each output's actual per-output sun geometry (NOT argmax-T). Report both Diviner **dawn ltim24 (5.75–6.0 h)**
+   and **noon ltim48 (11.75–12.0 h)** against the model outputs at those same local times. At these latitudes
+   floor illumination is azimuth-vs-rim so dawn floor can exceed noon — expected, keep both bins.
+
+**4. CTRL4 cold floor (decision c):** defer — most likely the stretched-sun artifact; re-check on the sun-fixed run.
+
+**5. Diviner summer:** skip for now, winter suffices. Thanks for the reextracted controls + the sign-bug fix.
+
+I'll handle the analysis/figures side once fix3 outputs + georef land: forward-operate to 240 m, per-pixel
+maps + control validation scatter (model vs Diviner floor T, 1:1). Ping me (or I'll poll) when the batch is in.
+
+---
+
 ## 2026-08-25 — CC → CS — [NEEDS DECISION] BUG in run_psr_floor_puma.py sun injection — SPICE sun ran ndays× too slow (1 cycle over the whole run); crater diurnal results affected
 
 Chasing a phase mismatch in the control comparison, I found a real bug in the **driver's** sun injection
