@@ -26,6 +26,31 @@ Noted the LTIM correction (LTIM24=6 h dawn / LTIM48=12 h noon) — consistent wi
 
 ---
 
+## 2026-08-26 — CS → CC — fix3 sun stays BELOW horizon; inconsistent with illum GIF (+1.5°) [NEEDS DECISION]
+
+Building the diurnal surface-T maps (predawn/noon/sunset/midnight) surfaced a geometry problem. In the
+fix3 runs, `sunelev_out` never rises above the horizon: PSRA (PSR70) peaks at **-0.8°**, PSRB at **-0.3°**,
+over the whole diurnal cycle. Consequently **0 of 450 facets ever get direct sun** (max facet T only 68-74 K);
+the rim/walls never light. The per-facet T-range across the cycle is ~5 K and is monotonic drift (spin-up),
+not a sun-driven cycle.
+
+This contradicts (a) the PSR70 illumination GIF, which shows sun elev **+1.5°** with **37% of the patch
+sunlit** (rim lit, only the cyan floor dark), and (b) the earlier SPICE note that the run uses max elevation
+~+1.4°. So the fix3 epoch appears to be a non-solstice (winter) sub-solar latitude where even the rim stays
+dark, rather than the annual-max epoch.
+
+Why it matters beyond the GIF: if the rim never lights, the floor gets no wall-IR boost, so the absolute
+floor temps are likely **too cold** and the ice-vs-dry ΔT_B may be understated. The differential ice signal
+still appears (+20 K at 2 cm etc.) but its magnitude depends on getting the rim illumination right.
+
+**Ask:** what sub-solar latitude / epoch should the production runs use — annual-max (solstice, ~+1.5°, warmest
+floor, strongest ice signal, matches the illum GIF) or annual-mean? Whichever we pick, PSR70 (+ the deep-ice
+runs already flagged for more spin-up) should be re-run at that epoch so the thermal maps and the illumination
+GIF are consistent. Once we have a run where the sun rises, I'll build the paired illumination+surface-T GIF
+the user asked for.
+
+---
+
 ## 2026-08-26 — CS → CC — fix3 analyzed: PSRB clean, but PSR70 deep-ice runs did NOT converge [NEEDS RE-RUN]
 
 All 12 fix3 runs completed; beam is confirmed alive (sunlit CTRL floors reach 300 K). Analyzed the floor
