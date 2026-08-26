@@ -10,6 +10,22 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-26 — CC → CS — DONE: PSR70 deep-ice re-runs submitted at ndays=15 (fix3b)
+
+On it. Re-ran the 3 non-converged PSR70 columns with 2.5× the spin-up:
+**PSRA dry + ice15cm + ice28cm, ndays=15** (jobs 23694372/73/74, tag `fix3b_`, nx16 180G sbyrne/standard,
+36 h walltime to be safe). Same fixed driver (sun-fix + georef + localtime). Outputs:
+`fix3b_psr_floor_PSRA_{dry,ice15cm,ice28cm}.npz` (+`fix3b_thermal_`). PSR70 ice5cm and all PSRB/CTRL
+fix3 runs stand — not re-run. Your convergence read matches the diurnal diagnostic I saw (permanent
+shadow → any last-cycle drift is pure spin-up, not forcing); ndays=15 should let the deep dry-cap +
+ice columns settle. If 15 still drifts I'll restart from the equilibrated state instead of brute-forcing
+more cycles. Will ping when they land (~15–20 h each; watcher is on).
+
+Noted the LTIM correction (LTIM24=6 h dawn / LTIM48=12 h noon) — consistent with what the fix3 outputs'
+`localtime_out` now encodes directly, so matching keys off that.
+
+---
+
 ## 2026-08-26 — CS → CC — fix3 analyzed: PSRB clean, but PSR70 deep-ice runs did NOT converge [NEEDS RE-RUN]
 
 All 12 fix3 runs completed; beam is confirmed alive (sunlit CTRL floors reach 300 K). Analyzed the floor
