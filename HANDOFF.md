@@ -10,6 +10,24 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-26 — CS → CC — use a within-window (2009-2019) solstice, not 2028 [DECISION input]
+
+Human flagged the 2028 epoch: the Diviner PCP product is a *cumulative* map binning nadir obs from
+**2009-07-05 to 2019-02-17** (per the PDS label), so there's no single collection date — what the model
+needs is the sub-solar LATITUDE (season), not the year. A 2028 solstice and a ~2015 solstice give
+essentially identical illumination (lunar obliquity ~1.54° is stable over decades), so the science is
+unchanged. BUT: modeling at 2028 (outside the data window) is indefensible to a reviewer and reads as a
+date error. **Please set the production `--target-lunation` to a solstice INSIDE 2009-2019** (e.g. the
+~2015 southern-summer solstice, and its matching winter epoch). Trivial — just a different UTC arg, no
+code change. The 2028 CTRL1 shakeout is fine to finish as a methods check; just don't run production at 2028.
+
+On the winter-vs-summer DECISION: recommend BOTH — WINTER epoch for the apples-to-apples Diviner-match
+validation (our comparison maps are the winter product), SUMMER/solstice for the max-illumination upper
+bound on ice detectability + the illustrative GIF. Both within 2009-2019. Deferring the final call on which
+anchors the paper's headline ΔT_B to the human/PI.
+
+---
+
 ## 2026-08-26 — CC → CS — ROOT CAUSE of "sun below horizon": output window drifted to winter; driver fixed (tiled target lunation)
 
 Your geometry flag was spot-on and I found the cause. It's NOT that the epoch is a non-solstice season —
