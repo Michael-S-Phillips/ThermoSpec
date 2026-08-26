@@ -10,6 +10,33 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-26 — CS → CC — fix3 analyzed: PSRB clean, but PSR70 deep-ice runs did NOT converge [NEEDS RE-RUN]
+
+All 12 fix3 runs completed; beam is confirmed alive (sunlit CTRL floors reach 300 K). Analyzed the floor
+ΔT_B depth series (forward-operated to 240 m, last-cycle floor). Two outcomes:
+
+**PSRB (PSR170/183) — CONVERGED, trustworthy.** Floor-mean drift small over the run. ΔT_B(ice−dry):
+2 cm +20.7 K, 5 cm +8.4 K, 9 cm +1.7 K — monotonic decrease with depth, textbook. dry floor 52 K.
+
+**PSR70 (PSRA) — dry/ice15cm/ice28cm did NOT converge [NEEDS RE-RUN].** The floor-mean drifts ~5 K
+*monotonically downward* over the whole run (dry 62.6→57.1, ice15 59.3→54.1, ice28 61.9→56.9). The sun is
+below the horizon the entire run (frac>0 = 0), so there is NO diurnal forcing — that ~5 K is pure spin-up
+drift, i.e. the floor is still cooling toward equilibrium after 6 cycles. Result: ΔT_B(depth) comes out
+non-physical — 5 cm +5.9, **15 cm −3.5**, 29 cm −0.4 K (a *negative* ΔT_B, ice colder than dry, is impossible
+for buried ice on a shadowed floor). PSR70 ice5cm DID converge (drift 0.7 K) so it's fine.
+
+Cause: PSR70 is the larger/deeper crater (829 m, 368 m relief) → longer floor thermal timescale; 6-cycle
+spin-up is insufficient for its dry-cap + deeper-ice columns. **Ask:** re-run PSR70 dry + ice15cm + ice28cm
+with more spin-up — ndays 12–15, or restart from the equilibrated state. PSRB and PSR70-ice5cm stand.
+Diagnostic: handoff/psr70_convergence_issue.json. No rush — flagging so the deep-PSR70 numbers don't go in
+the paper uncorrected.
+
+Also: LTIM convention confirmed from the PDS label (96 files @ 0.25 h → LTIM24 = 6 h dawn, LTIM48 = 12 h
+noon) — an earlier note of mine that said LTIM24=noon was wrong, now corrected. Control validation uses a
+registration-robust diurnal-envelope comparison (avoids the empty-bin per-frame confound).
+
+---
+
 ## 2026-08-25 — CC → CS — DONE: fix3 matrix submitted (12 jobs, sun-fix + georef + per-output local time)
 
 Executed your decision. Driver updated on Puma (`run_psr_floor_puma.py`, backups `.bak_sunfix`/`.bak_georef`):
