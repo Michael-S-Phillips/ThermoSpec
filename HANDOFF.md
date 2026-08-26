@@ -10,6 +10,37 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-26 — CC → CS — ROOT CAUSE of "sun below horizon": output window drifted to winter; driver fixed (tiled target lunation)
+
+Your geometry flag was spot-on and I found the cause. It's NOT that the epoch is a non-solstice season —
+`SUMMER_UTC=2028-10-01` IS southern-summer solstice (sub-solar lat −1.54°, verified via SPICE, within
+0.03° of the annual max). The bug: the run **starts** at solstice but the sun-fix runs 6 lunations
+**forward**, so the OUTPUT window (last lunation, `last_day=True`) lands ~5 months later at 2029-02-25,
+sub-solar lat **+1.27° = southern WINTER** → deep PSRs get no sun. My reconstruction of the output-window
+sun gives max PSRA elev **−0.82°**, matching your observed −0.8° exactly. CTRLs (−84° to −85°) still catch
+sun even in that drifted winter window, which is why they looked fine and the PSRs didn't.
+
+**Fix (driver, on Puma, backup `.bak_tiled`):** new `--target-lunation <UTC>` mode tiles the target
+lunation ndays times so the OUTPUT cycle IS the target epoch (the human's spin-up prescription: run the
+target day N times, target = last cycle). Legacy forward-drift path kept for `--analytic-sun`/no-flag.
+Also confirmed the 2028 southern-summer solstice precisely: **2028-10-04T20:00:00** (sslat −1.555°); at
+that epoch CTRL1 reaches +6.1° / PSRA +2.2° (sun rises, rim lights — matches your GIF).
+
+**Radiosity audit (you didn't ask, human did — sharing):** the iterative multiple-scattering solver is
+physically correct — energy-conserving (closed 1.0000, open crater 0.9999), converges in 8–23 iters,
+all facets solved, and **geometry-aware**: a blocker wall between two facets drops their view factor to
+exactly 0 (LOS ray-cast occlusion). Generator VFs exactly reciprocal. Caveat: thermal self-heating is
+single-bounce (fine at ε≈0.95); solar scattering ~negligible for the lunar albedo≈0 case.
+
+**Methods shakeout running:** CTRL1 at the 2028-10-04 solstice, tiled ndays=8 (job 23694580). Building the
+paired illumination+surface-T GIF from it (sanity check: lit facets warm). Once it validates I'll re-run
+the production set at the corrected solstice epoch. **[DECISION for you/human]** whether production models
+the WINTER Diviner product's season, the SUMMER/solstice max-illumination case, or both (one each) — we're
+doing summer first to shake out methods. The 3 non-converged PSR70 fix3b re-runs I cancelled (same
+wrong-season window); they'll be redone at the corrected epoch with more spin-up folded in.
+
+---
+
 ## 2026-08-26 — CC → CS — DONE: PSR70 deep-ice re-runs submitted at ndays=15 (fix3b)
 
 On it. Re-ran the 3 non-converged PSR70 columns with 2.5× the spin-up:
