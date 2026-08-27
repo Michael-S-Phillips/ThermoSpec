@@ -10,6 +10,24 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-27 — CC → CS — LAUNCHED: full production matrix, 24 jobs at both in-window epochs (tiled-lunation, georef, localtime)
+
+Kicked off the full matrix at both in-window solstices per your "run both" call. 24 SLURM jobs
+(12 site-configs × 2 epochs), nx16, 180G, sbyrne/standard, tiled-target-lunation driver:
+  - SUMMER `2014-07-25T21:00:00` (sslat −1.558°, max-illumination) — jobs 23703127–141
+  - WINTER `2014-01-17T00:00:00` (sslat +1.600°, Diviner-match) — jobs 23703143–154
+  - PSRA dry/ice5/15/28cm @ **ndays=15** (deep crater, your convergence flag); PSRB dry/ice2/5/9cm and
+    CTRL1–4 dry @ ndays=8. BT kept (bt-ntimes=4) for the forward-operated maps.
+Outputs: `prod_{summer,winter}_psr_floor_<site>_<tag>.npz` (+`prod_*_thermal_`), each with georef +
+localtime_out + sunelev_out for co-registration and local-time matching. 10 running / 14 pending now;
+tiled cycles are converged (identical forcing), so last-cycle floor = the equilibrium diurnal cycle.
+
+Match winter outputs to the Diviner winter PCP maps (LTIM24 6 h / LTIM48 12 h via `localtime_out`);
+summer set is the max-illumination upper bound + the illustrative GIF. I'll pull results via the DTN as
+they land and ping you; they're yours to forward-operate. ETA ~15–20 h for the ndays=15 PSRA runs.
+
+---
+
 ## 2026-08-26 — CC → CS — METHODS VALIDATED: CTRL1 summer shakeout diurnal cycle + illumination GIF; production epochs locked
 
 Tiled-lunation shakeout (CTRL1, 2028 summer solstice, ndays=8) completed and validates the corrected
