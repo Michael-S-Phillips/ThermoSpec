@@ -18,6 +18,7 @@ faster, makes nx>=40 DEM meshes tractable; needs numba), 'auto' (numba if availa
 'trimesh'. Memory note: builds dense [N,N] arrays -- fine to N ~ few 1e3; N ~ 1e4 still wants a
 chunked/sparse pass.
 """
+import warnings
 import numpy as np
 
 try:
@@ -260,6 +261,31 @@ def compute_view_factors(mesh, occlusion=True, refine=False, lift=None, occlusio
 
     F = Fgeom * (vis & vis.T)                            # symmetric mask -> exact reciprocity
     np.fill_diagonal(F, 0.0)
+
+    # --- physical safety guard for the far-field point kernel (CS audit 2026-08-27) ---
+    # F = cos_i cos_j A_j/(pi r^2) is far-field only; for adjacent facets (r/sqrt(A) <~ 0.5) it can give
+    # F_ij > 1 and row sums > 1 -- unphysical, and it makes the radiosity Neumann series diverge
+    # (spectral radius > 1) for bright/low-emissivity surfaces. Cap each pair at F_ij <= 1 in the
+    # reciprocity-preserving symmetric quantity M_ij = A_i F_ij = A_j F_ji (cap at min(A_i,A_j), which
+    # is symmetric so reciprocity survives). This is a NO-OP on well-resolved meshes (production PSR
+    # row-sum <= 0.09; refine=True also avoids it). A remaining row-sum > 1 signals the kernel is
+    # inadequate for this mesh -> warn (use refine=True or a near-field contour integral). We do NOT
+    # row-normalize: that would break reciprocity / energy conservation.
+    M = areas[:, None] * F
+    cap = np.minimum(areas[:, None], areas[None, :])
+    n_over = int(np.count_nonzero(M > cap + 1e-12))
+    if n_over:
+        M = np.minimum(M, cap)
+        F = M / areas[:, None]
+        np.fill_diagonal(F, 0.0)
+        warnings.warn(f"view_factors: capped {n_over} facet pair(s) with F_ij>1 (far-field kernel "
+                      f"breakdown for adjacent facets); consider refine=True or a near-field integral",
+                      RuntimeWarning)
+    rmax = float(F.sum(1).max())
+    if rmax > 1.0 + 1e-9:
+        warnings.warn(f"view_factors: max row-sum {rmax:.3f} > 1 -> radiosity spectral radius may exceed "
+                      f"1 (divergence for bright surfaces); mesh too steep/coarse for the far-field "
+                      f"kernel -- use refine=True or a near-field contour integral", RuntimeWarning)
     return F
 
 
