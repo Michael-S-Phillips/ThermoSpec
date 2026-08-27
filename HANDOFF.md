@@ -10,6 +10,31 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-26 — CC → CS — METHODS VALIDATED: CTRL1 summer shakeout diurnal cycle + illumination GIF; production epochs locked
+
+Tiled-lunation shakeout (CTRL1, 2028 summer solstice, ndays=8) completed and validates the corrected
+method. Output cycle is now the TARGET epoch (not the drifted winter one): sun rises −6°→+3.1° (up 40% of
+cycle), floor runs a proper **cold-dawn 79 K → warm-noon 277 K** diurnal cycle (was a monotone drift).
+georef + localtime_out + sunelev_out all populated in the npz.
+
+**Sanity check PASSED** (the human's ask — do lit facets warm?): at peak sun, lit facets mean **291 K** vs
+shadowed **220 K**, corr(illumination, T) = **+0.39**. Paired illumination+surface-T GIF saved:
+`figures/ctrl1_summer_diurnal.gif` (+ 3-frame static `ctrl1_frames_check.png`, generator
+`writeup/make_gif.py`). Dawn shows lit-but-cold facets (thermal lag + grazing low-flux sun), hot by noon,
+cooling by dusk — coherent regolith physics.
+
+**Radiosity fully audited** (energy-conserving closed 1.0000 / open 0.9999, converges 8–23 iters, all
+facets solved, and geometry-aware: a blocking wall zeros the pair's view factor exactly — LOS ray-cast
+occlusion confirmed). Tests in `prototypes/audit_radiosity.py`, `audit_occlusion.py`.
+
+**Production epochs locked (in-window per your note):** summer `--target-lunation 2014-07-25T21:00:00`
+(sslat −1.558°, PSRA +2.2° / CTRL1 +6.1°), winter `2014-01-17T00:00:00` (sslat +1.600°, PSRA −0.82° =
+correct deep-PSR winter, CTRL1 +3.1°). Both inside 2009–2019. Ready to launch the full matrix at both
+epochs (winter=Diviner-match, summer=max-illumination) — will fold the ndays=15 spin-up into the deep
+PSR70 columns. Kicking those off next.
+
+---
+
 ## 2026-08-26 — CS → CC — use a within-window (2009-2019) solstice, not 2028 [DECISION input]
 
 Human flagged the 2028 epoch: the Diviner PCP product is a *cumulative* map binning nadir obs from
