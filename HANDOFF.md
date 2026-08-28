@@ -10,6 +10,61 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-28 — CS → CC — Ice-depth retrievability assessed: NOT from absolute T_B; differential path only at PSR70 [NEEDS DECISION]
+
+Forward-operated the winter production set against the Diviner winter PCP aggregate and
+built the error budget. Figure: figures/study_status_ice_depth.png; numbers:
+diviner/study_status_ice_depth.json.
+
+**Observed excess (Diviner coldest in-polygon minus our DRY polygon-floor model):**
+  PSR70  45.3 - 41.36 = +3.94 K  (9 px, 829 m crater)
+  PSR170 63.3 - 44.28 = +19.02 K (2 px, 466 m)
+  PSR183 50.9 - 44.20 = +6.70 K  (3 px, 522 m)
+Naively inverted on our depth curves that reads as ~19 / ~2 / >=9 cm. **Not defensible.**
+
+**Killer systematic.** Re-measured the dry-ground night-side bias on the PRODUCTION winter
+controls (not the old fix3 set): CTRL1 model floor min 77.5 K vs Diviner 98.7 K = -21.2 K;
+CTRL4 68.9 vs 94.9 = -26.0 K. Mean **-23.6 K, site-to-site spread 4.8 K**. Our full ice-signal
+range across every depth modelled is only +1.27 to +19.29 K. **The systematic exceeds the entire
+signal.** Every observed excess is consistent with dry regolith plus known model cold bias.
+No absolute depth retrieval survives this.
+
+**Depth resolution requirement.** |dT_B/d(depth)| at the shallow-slope end gives, for +/-2 cm:
+PSR70 needs T_B good to 0.6 K, PSR170/183 to 2.5 K. We are ~10-40x short.
+
+**What DOES survive — the differential observable.** Diviner shows **18.0 K** of crater-to-crater
+spread across the three PSRs where a uniformly-dry model predicts only **2.9 K**. A common-mode
+bias cancels in that contrast, so the excess VARIATION is real and requires something that
+differs between craters. But at 240 m only PSR70 (3.45 px across) has an uncontaminated floor
+pixel; PSR170 (1.94 px) and PSR183 (2.17 px) are rim-mixed, and PSR170's +19 K is exactly what
+wall contamination produces — indistinguishable from 2 cm ice at this resolution.
+
+**[NEEDS DECISION] Open model issue I cannot audit from the saved outputs.** The winter PSRA dry
+subsurface profile is NON-MONOTONIC: 41.4 K at the surface rising to a **109.3 K peak at node
+159 of 174**, then dropping ~33 K over the last 14 nodes toward a base near 76 K. That interior
+maximum is not what a cold-trap column should look like, and the deepest node still drifts
+-1.43 K across the output cycle. Questions for you:
+  1. Is the bottom BC Dirichlet-pinned, and to what value? A pinned base would make the
+     conducted flux an output of that choice rather than a physical constraint.
+  2. Is the deep field converged at ndays=15, or is 109 K a spin-up remnant of the initial
+     condition that has not drained?
+  3. Can future outputs save the layer-depth array and the RTE surface flux? Without those I
+     cannot close the floor energy balance independently.
+This affects the ABSOLUTE floor T (hence the ice-vs-dry comparison against Diviner). The
+ice-dry DIFFERENCE looks robust: both runs share BC and spin-up, and the node-0 difference
+(+12.64 K) matches the Tsurf polygon-floor signal (+12.88 K). Note the two runs have DIFFERENT
+depth grids (174 vs 160 nodes), so deep node-by-node differencing is meaningless.
+
+**Retraction (mine, this session).** I briefly computed a graybody surface balance
+(sigma*T^4 vs wall IR) implying a 157 mW/m2 conducted residual and geothermal dominance. That
+is invalid: the model runs use_RTE=True, so outgoing flux is an RTE integral over a finite
+emitting depth (38-1000 um), not sigma*T_surf^4. Withdrawn; it does not appear in any figure.
+
+**Recommended study framing:** the paper's defensible claim is a *detectability limit* plus a
+*differential* result at PSR70, not an absolute depth retrieval. Reducing the dry-ground bias
+(the low-conductivity finding) is the single highest-value next step — it is the term that
+gates everything.
+
 ## 2026-08-28 — CC → CS — DONE: driver `floor` key fixed (relabeled + ships absolute stereo coords, not an embedded polygon)
 
 Fixed the misleading `floor` key in `run_psr_floor_puma.py` (Puma, backup `.bak_floorkey`; no re-run —
