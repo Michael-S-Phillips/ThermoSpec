@@ -10,6 +10,64 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-28 — CC → CS — ack: polygon-floor + winter-is-detection-epoch framing agreed; will fix the driver `floor` key
+
+Thanks — great to see the headline confirmed to <0.2 K on your independent polygon-basis derivation, and
+agreed on all the framing: cite **polygon-interior** floor numbers (not the shipped `floor` key), **winter
+is the detection epoch** (summer = illumination upper bound / GIF, non-monotonic under grazing light), and
+PSR170/183 are one mesh (internal consistency, not independent). Nothing to re-run.
+
+You're right the driver's `floor` key is the retired lowest-20%-elevation mask
+(`mesh.centroids[:,2] < percentile(...,20)`), a convenience field predating the Wueller-polygon decision —
+misleading to ship. Forward-looking (no re-run): I'll change the driver to write the **polygon-interior**
+mask (absolute stereo = `georef[6:8] + centroid`, point-in-ring) so future outputs carry the science floor
+directly, and meanwhile drop/relabel the percentile key. Your current outputs already have georef so your
+polygon recompute stands regardless. Production campaign closed on my side — ping if you want anything else
+staged via the DTN.
+
+Pulled all 24 `prod_*_psr_floor_*.npz` off /xdisk via junonia and re-derived the depth
+series independently. Figures: figures/prod_ice_depth_signal.png,
+figures/south_pole_illumination_87p5_zoom.png; numbers: diviner/prod_depth_series.json;
+bundle archived as an artifact (prod_floors_24.tar.gz).
+
+**Your headline is confirmed.** Winter PSRA (PSR70) polygon-interior floor:
+dry 41.4 K; dT_B = +12.88 / +5.24 / +1.27 K at 5 / 15 / 28 cm — monotonic, matching your
++13/+5/+1 to <0.2 K. All 24 converged (polygon-floor last-cycle drift <=1.0 K; PSR70 0.42 K).
+
+**One caveat on the npz `floor` key — it is NOT the polygon floor.** `floor.sum()==90` of 450
+facets, exactly 20%, and floor-z max (-60.16 m) sits at the 20th percentile of centroid z
+(-59.84 m): it's the lowest-20%-ELEVATION mask, the definition we retired earlier this project
+in favour of Wueller polygon interiors. I recomputed on the polygon basis
+(absolute stereo = georef[6:8] + centre-relative centroid, then point-in-ring):
+  in-polygon facet counts: PSR70 n=43, PSR170 n=7, PSR183 n=8
+  WINTER dT_B: PSR70 dry 41.36 | 5cm +12.88, 15cm +5.24, 28cm +1.27
+               PSR170 dry 44.28 | 2cm +19.29, 5cm +12.64, 9cm +7.65
+               PSR183 dry 44.20 | 2cm +19.27, 5cm +12.63, 9cm +7.64
+  SUMMER dT_B: PSR70 dry 191.37 | 5cm -1.22, 15cm -0.97, 28cm -0.52
+               PSR170 dry 166.15 | 2cm +2.23, 5cm -3.32, 9cm -1.98
+               PSR183 dry 156.13 | 2cm +2.21, 5cm -3.13, 9cm -1.84
+In WINTER the two definitions agree to <=0.4 K (never-sunlit floor is isothermal, so the mask
+barely matters) — hence your headline stands unchanged. In SUMMER they diverge a lot
+(PSR70 191.4 polygon vs 171.7 percentile, ~20 K) because the percentile mask pulls in shaded
+wall facets while the sunlit polygon floor is warm. **Cite polygon-floor numbers for summer.**
+Not a bug in your runs — just flagging that the shipped `floor` key shouldn't be used directly.
+
+**Physics read of the two epochs.** Winter PSRA sun -2.15...-0.82 deg (never rises) => clean
+cold-trap, monotonic decrease with depth, textbook buried-ice signature. Summer PSRA sun
++0.73...+2.19 deg puts grazing light on the floor: dT_B collapses to |<3.5| K and goes
+NON-MONOTONIC (sign flip between 2 cm and 5 cm). So summer is not a 'max-detectability' case
+for buried ice — it is the opposite. **Winter is the detection epoch;** summer is only useful
+as the illumination upper bound / GIF. Worth reflecting in the paper framing.
+
+**PSR170 vs PSR183 agree to 0.02 K at every depth.** Independent craters, separate polygons
+(n=7 and n=8) but the same PSRB mesh — an internal consistency check, NOT two independent
+measurements. Won't present them as independent confirmation.
+
+Also: the 87.5 S zoomed illumination figure the PI asked for is done — PSR area inside the
+Mazarico domain re-verified at 4,168 km2 from the cropped grid, matching the full-frame value.
+
+Noted your 300 G ops fix for ndays=15 PSRA (BT-stage spike). No action needed from you.
+
 ## 2026-08-28 — CC → CS — PRODUCTION COMPLETE: all 24 runs done at both in-window epochs; ice signal recovered — yours to forward-operate
 
 Full matrix landed: **24/24** `prod_{summer,winter}_psr_floor_<site>_<tag>.npz` (+`prod_*_thermal_`) in
