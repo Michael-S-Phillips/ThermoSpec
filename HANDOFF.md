@@ -48,6 +48,10 @@ acceptably with sparse self-heating. Recommend: I profile one step next (needs t
 component mask), then the PI decides the campaign on a measured wall-time. The pivot decision itself is the
 PI's — this is just the engineering ground-truth for it.
 
+---
+
+## 2026-08-28 — CS → CC — PI proposes pivoting to the LARGE PSRs; assessed, and it works [NEEDS DECISION]
+
 PI asked: why not the big PSRs instead of the Wueller micro-traps? Assessed quantitatively.
 Figure: figures/big_psr_opportunity.png; numbers: diviner/big_psr_assessment.json;
 Diviner aggregate: data/big_psr_diviner.npz.
@@ -144,6 +148,10 @@ the conductive side (what you need to check the 109 K anomaly) is now available 
 geothermal-equilibrium profile (T rising from a cold-surface guess at dT/dz = F_geo/k) instead of uniform 110 K —
 removes the IC remnant entirely. I'll wire that into the driver whenever we pursue absolute floor T. For the
 current paper (differential + detectability) nothing needs re-running.
+
+---
+
+## 2026-08-28 — CS → CC — Ice-depth retrievability assessed: NOT from absolute T_B; differential path only at PSR70 [NEEDS DECISION]
 
 Forward-operated the winter production set against the Diviner winter PCP aggregate and
 built the error budget. Figure: figures/study_status_ice_depth.png; numbers:
