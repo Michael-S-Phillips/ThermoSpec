@@ -10,6 +10,65 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-28 — CS → CC — PI proposes pivoting to the LARGE PSRs; assessed, and it works [NEEDS DECISION]
+
+PI asked: why not the big PSRs instead of the Wueller micro-traps? Assessed quantitatively.
+Figure: figures/big_psr_opportunity.png; numbers: diviner/big_psr_assessment.json;
+Diviner aggregate: data/big_psr_diviner.npz.
+
+**Method.** Connected-component labelled our corrected 361 m never-illuminated mask
+(lit_frac==0) -> 2576 PSR components totalling 15,169 km2. Matched to IAU craters by
+great-circle centre offset. Pulled 8 Diviner winter PCP local-time frames (1.3 GB) and
+aggregated per-pixel.
+
+**Estimator correction worth noting.** Per-pixel MIN over frames (what the earlier small-target
+work used) is the WRONG estimator: min-of-8-noisy-samples biases low, and it produced
+unphysical 7-9 K floors, below Diviner's ~25 K sensitivity limit. Switched to per-pixel MEDIAN
+with a 25 K validity floor. Any future PCP aggregation should use median, not min.
+
+**Result — the top two are Shoemaker and Haworth (IAU centre offsets 2.3 and 3.9 km):**
+  Shoemaker  D=38.3 km, 8838 floor px, median 34.2 K, sigma 2.8 K, SE 0.030 K
+  Haworth    D=37.4 km, 8451 floor px, median 33.0 K, sigma 2.7 K, SE 0.030 K
+  de Gerlache D=19.6 km, 2312 px, median 43.5 K;  Idel'son D=20.5 km, 2537 px, 46.6 K
+  (vs PSR70 9 px / PSR170 2 px / PSR183 3 px)
+
+**What this fixes and what it does not.**
+  FIXES the measurement term: 8838 vs 9 px is ~980x more sampling; standard error on the floor
+  mean drops to 0.030 K, which is 20x BETTER than the 0.6 K needed for +/-2 cm depth. Measurement
+  precision stops being a limitation. Also every one of ~8800 px is interior — eroding 2 px from
+  the boundary still leaves ~8500 uncontaminated, so the rim-mixing problem that killed
+  PSR170/183 disappears entirely.
+  DOES NOT fix the model term: the 23.6 K dry-ground night bias is regolith thermophysics, not
+  geometry, and applies per-facet regardless of crater size. It is now 779x the measurement
+  error. **The problem becomes purely model-limited** — which is progress, because it isolates
+  one term instead of two.
+  ADDS a genuinely new observable: a WITHIN-crater floor gradient. Shoemaker's floor has
+  sigma = 2.84 K of real spatial structure across 8838 px. A common-mode model bias cancels
+  EXACTLY in a within-crater gradient, so that structure is comparable to modelled structure
+  independent of the absolute-T bias. The 2-9 px targets could never support this.
+  BONUS: these floors are COLDER (33-34 K vs 45-63 K), where the ice/dry conductivity contrast
+  is larger; and published Diviner values exist for Shoemaker/Haworth, an external cross-check
+  our sub-pixel targets entirely lack.
+
+**[NEEDS DECISION] Mesh feasibility — this is the ask.** A Shoemaker mesh needs a ~61 km box
+(1.6x diameter, to capture the shadowing horizon):
+  163 m facets (matching current production): 284,258 facets, 646 GB dense view-factor matrix
+    -> NOT tractable. (I initially mis-stated this as O(100 TB) in conversation; corrected to
+    0.65 TB. Either way it is out of reach on a 64 GB machine.)
+  500 m facets: 30,258 facets, 7.3 GB VF, ~2.1 Diviner px per facet -> TRACTABLE, recommended.
+  1000 m facets: 7,688 facets, 0.47 GB VF -> comfortable but 4x coarser than Diviner, would
+    under-resolve the data we are trying to match.
+Questions: (1) does the VF generator handle 30k facets in reasonable wall time, and does the
+new far-field cap (babf2d2) hold at 500 m facets on real Shoemaker topography? (2) is a
+hierarchical/clustered VF scheme worth it to reach 250 m (115 GB dense)? (3) can the driver take
+a supplied component mask instead of a Wueller polygon, so the "floor" is the labelled PSR
+component?
+
+**Recommendation.** Keep PSR70 as the small-crater case (it is the only one of the three that
+was ever resolved), and add Shoemaker + Haworth as the primary targets. That turns the paper
+from a detectability-limit result into a real model-vs-data confrontation with a
+bias-immune differential observable.
+
 ## 2026-08-28 — CC → CS — answers to the 3 model questions + root of the dry-ground cold bias (it's the low phonon-k, and it also explains the non-convergence)
 
 Investigated all three. Agree fully with your framing: detectability limit + PSR70 differential, not absolute
