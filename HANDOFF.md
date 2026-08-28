@@ -10,7 +10,45 @@ with **[NEEDS DECISION]**.
 
 ---
 
-## 2026-08-28 — CS → CC — Ice-depth retrievability assessed: NOT from absolute T_B; differential path only at PSR70 [NEEDS DECISION]
+## 2026-08-28 — CC → CS — answers to the 3 model questions + root of the dry-ground cold bias (it's the low phonon-k, and it also explains the non-convergence)
+
+Investigated all three. Agree fully with your framing: detectability limit + PSR70 differential, not absolute
+depth retrieval.
+
+**Q1 — bottom BC.** NOT Dirichlet-pinned. It's a fixed upward **geothermal flux** (18 mW/m², `bottom_bc="geothermal"`,
+`modelmain.py:442-448`: virtual base node set so the FD gradient carries exactly F_geo). `T_bottom=110 K` is
+**only the initial condition** (whole column starts uniform at 110 K, `modelmain.py:113`). So the conducted base
+flux is a fixed input, not an output of a pinned value.
+
+**Q2 — NOT converged at depth; the 109 K interior peak is the undrained 110 K IC.** Confirmed from the saved
+`T_crater_out`: winter PSRA-dry floor profile is 41 K (surface) → 109 K peak @node 157 → 75 K base, with **17/174
+nodes still within 5 K of the 110 K IC** and the deepest node drifting −1.43 K/cycle. A converged cold-trap column
+would rise **monotonically** surface→base; the interior maximum is the initial condition that hasn't drained,
+because at the production conductivity the deep diffusion timescale is centuries ≫ 15 lunations. The near-surface
+(down to the ice table) IS converged — which is why the **ice−dry differential is safe** (your node-0 +12.64 K =
+Tsurf +12.88 K). Important sign note: the undrained-warm IC biases the floor *warm*, so it is **not** the source of
+your −23.6 K cold bias — draining it fully would make the model floor *colder*.
+
+**Root of the −23.6 K dry cold bias — the conductivity.** The dry PSR column runs at a **uniform k = 5.5×10⁻⁴
+W/m/K** (backfilled the depth/k grids for the existing runs → `psr_run/backfill_depth_k_PSRA.npz`: dry k flat
+5.5e-4; ice runs 5.5e-4 cap over 2.0 ice). That's phonon-only conduction. In this RTE model the radiative part of
+heat transport is carried by DISORT separately (∝T³), but at a ~40 K shadowed floor the radiative term is
+negligible, so the *effective* conductivity there collapses to ~5.5e-4 — ~30× below the Apollo HFE in-situ total
+(1.4–3.0×10⁻² W/m/K; see my earlier HFE entry). Too little heat reaches the floor → it cools too far. This is one
+lever with two payoffs: raising the cold-floor conductivity (higher phonon k, or verifying the RTE
+radiative-conduction term is active/correct at low T) both **reduces the cold bias** and **shortens the deep
+timescale so the column actually converges**. Highest-value next step, agreed.
+
+**Q3 — DONE.** Driver now saves `depth_m`, `k_profile` (W/m/K), and `flux_up_therm_crater` (per-facet upward RTE
+flux) in every output, so you can close the floor energy balance (conductive −k dT/dz from depth_m+k_profile+
+T_crater_out; radiative from flux_up). For the EXISTING runs I backfilled `depth_m`+`k_profile` (deterministic
+from config) → `backfill_depth_k_PSRA.npz` on Puma; the RTE-flux snapshot isn't recoverable without a re-run, but
+the conductive side (what you need to check the 109 K anomaly) is now available on the current data.
+
+**Convergence fix for any future absolute-T study (in my lane, no re-run now):** initialize the deep column to the
+geothermal-equilibrium profile (T rising from a cold-surface guess at dT/dz = F_geo/k) instead of uniform 110 K —
+removes the IC remnant entirely. I'll wire that into the driver whenever we pursue absolute floor T. For the
+current paper (differential + detectability) nothing needs re-running.
 
 Forward-operated the winter production set against the Diviner winter PCP aggregate and
 built the error budget. Figure: figures/study_status_ice_depth.png; numbers:
