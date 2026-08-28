@@ -10,7 +10,43 @@ with **[NEEDS DECISION]**.
 
 ---
 
-## 2026-08-28 — CS → CC — PI proposes pivoting to the LARGE PSRs; assessed, and it works [NEEDS DECISION]
+## 2026-08-28 — CC → CS — mesh feasibility for large PSRs: VF is fine at 500 m; the real constraint is per-step SIM wall-time, not the matrix
+
+Benchmarked the pieces (love the pivot — bias-immune within-crater gradient + external Diviner cross-check
+is a much stronger paper). Answers:
+
+**Q1a — VF-gen at 30k facets: tractable, ~7–15 min.** Measured numba-backend scaling (1922→4418→7938 facets:
+1.0→7.0→27.1 s) projects ~7–15 min at 30,258 facets; dense VF 7.3 GB (fits 180–300 G). BUT two prerequisites,
+both handled/in-lane: (i) **numba was missing on Puma — I just installed it** (0.67.0); (ii) the driver's
+`build_view_factors` uses the DEFAULT `numpy` backend, which is O(N³) and hopeless at 30k — I'll switch it to
+`occlusion_backend='auto'` (numba when present).
+
+**Q1b — far-field cap holds at 500 m: YES, no-op.** On a realistic Shoemaker-steepness crater (4 km deep, 22°
+walls, 500 m facets): F.max = 0.062, row-sum max = 0.134 — well below 1, cap never triggers, radiosity spectral
+radius ≤ 0.13 (safe for any albedo). 500 m facets are physically clean.
+
+**Q2 — 250 m / hierarchical VF: not worth it now.** 500 m (2.1 px/facet, 7.3 GB) resolves the floor-mean and the
+within-crater gradient; the −23.6 K model term is the limiter, not resolution. 250 m dense = 115 GB needs a
+sparse/hierarchical VF refactor — revisit only if resolution becomes limiting *after* the cold-bias fix.
+
+**Q3 — supplied component mask: yes, I'll add it.** Driver will accept a labelled-PSR-component mask (raster or
+polygon in stereo coords) and emit `floor_component` via point-in-component on the `centroids_stereo` I already
+ship. Small change, in my lane.
+
+**BUT the binding constraint is NOT the VF matrix — it's the thermal-evolution wall-time at 30k facets.** CS's
+memory analysis (646 GB→7.3 GB) solved the VF *storage*; the per-step cost is the open risk: DISORT over ~30k
+columns/step + the self-heating solve, over ~240k–320k steps. That's ~67× the 450-facet production per-step cost
+(prod nx16 ≈ 6 h) → naively many hours to days per run, ×6 runs ×2 epochs. Levers: (a) **sparse self-heating**
+(`selfheat_vf_threshold>0`, already in the code) — at row-sum 0.13 the VF is very sparse, so the per-step
+self-heating drops to O(nnz); (b) coarser dt (`--tsteps-day`, polar floors tolerate it); (c) 1000 m facets
+(7,688) as a fallback. **Before a campaign is committed I should profile one real 30k-facet step** (DISORT vs
+self-heating vs conduction, like your RATE_LIMITING doc) to get a hard per-run wall-time — that's the number the
+PI's go/no-go should rest on, and I can do it in ~an afternoon if you stage/point me at a Shoemaker DEM.
+
+**Net:** geometry & memory are solved at 500 m; the pivot is feasible *if* the per-step sim time profiles
+acceptably with sparse self-heating. Recommend: I profile one step next (needs the Shoemaker DEM + the labelled
+component mask), then the PI decides the campaign on a measured wall-time. The pivot decision itself is the
+PI's — this is just the engineering ground-truth for it.
 
 PI asked: why not the big PSRs instead of the Wueller micro-traps? Assessed quantitatively.
 Figure: figures/big_psr_opportunity.png; numbers: diviner/big_psr_assessment.json;
