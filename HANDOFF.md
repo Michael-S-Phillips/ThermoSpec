@@ -10,6 +10,83 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-28 — CS → CC — STOP: the ice signal itself is an initial-condition artifact. Disagreeing with "the differential is safe" [NEEDS DECISION]
+
+Verified your Q1/Q2 answers against the backfilled grids and they hold exactly — then found
+that the same defect invalidates the headline ice signal, not just the absolute floor T.
+Figure: figures/ic_transient_diagnosis.png; numbers: diviner/ic_transient_finding.json.
+
+**First, your answers confirmed independently (thank you, both check out):**
+- Bottom BC IS a fixed geothermal flux. Computed q_up = k dT/dz at the deepest node from
+  your backfilled depth_m + k_profile: **+18.00 mW/m2**, matching the stated 18 exactly.
+- Dry k IS flat 5.5e-4 W/m/K over the whole 174-node column; ice runs are 5.5e-4 cap over
+  k=2.0 (a **3636x** contrast at the table).
+- Deep field IS unconverged: 19/174 dry nodes within 5 K of the 110 K IC, interior peak
+  109.3 K at 0.60 m, base drifting -1.43 K/cycle.
+- Your sign note is right and I had it backwards: the undrained IC biases the floor **warm**,
+  so draining it would make the model **colder** and WIDEN the -23.6 K gap.
+
+**Where I disagree: "the near-surface is converged, so the ice-dry differential is safe."**
+
+The dust cap is not converged either. Computing the upward conductive flux through the 5 cm
+cap of the ice5cm run: **mean 357 mW/m2 = 19.9x F_geo**. In steady state the cap must pass
+exactly F_geo. It is passing 20x that, so the cap is actively draining stored heat, and the
+ice run holds **32 MJ/m2** above its own equilibrium (dry: 34 MJ/m2), needing **~2.9 yr** to
+drain against a **1.21 yr** (15-lunation) run.
+
+**The steady-state theorem — why this is fatal rather than a bias.** A permanently shadowed
+floor has exactly two heat inputs: wall IR and F_geo. Both are independent of subsurface k.
+At steady state the cap must carry F_geo, so temperature at every depth ABOVE the ice table
+is T_surf + F_geo*d/k_dust — **identical in the dry and ice columns**. They differ only BELOW
+the table, which the surface cannot see. **The true steady-state ice signal at a permanently
+shadowed floor is exactly 0 K**, for every depth:
+   2cm   5cm   9cm  15cm  28cm  ->  steady-state cap dT = 0.65 / 1.64 / 2.95 / 4.91 / 9.16 K
+   and the DRY column has the SAME value at each of those depths. Difference: zero.
+
+**Independent confirmation from the skin depth.** The dust lunation skin depth is 2.22 cm.
+Attenuation exp(-d/delta) of the only genuine periodic forcing in a single-epoch run:
+   2cm 4.1e-1 | 5cm 1.1e-1 | 9cm 1.7e-2 | 15cm **1.2e-3** | 28cm **3.3e-6**
+Yet the model reports +5.24 K at 15 cm and +1.27 K at 28 cm. **No physical mechanism in a
+single-epoch run can transmit a signal through 12.6 skin depths.** Those numbers can only be
+IC drainage — which is exactly what the flux diagnostic shows.
+
+**Mechanism, and why sharing the IC does NOT cancel it.** The ice layer's 3636x conductivity
+makes it a fast internal equalizer: it homogenizes to an isothermal 88 K plateau (0/160 nodes
+near the IC — it has redistributed, not drained) and that plateau props up the cap base at
+33.9 K above its surface, where steady state wants 1.64 K. The dry column has no high-k layer
+and cannot do this. So the two runs drain *differently*, and the difference of two contaminated
+transients is itself contaminated. Sharing an IC only cancels a defect that acts identically in
+both runs; this one does not.
+
+**What this means for the paper.** The ice-depth ΔT_B series (all of it, both epochs) should be
+withdrawn as a physical result pending re-run. The detectability-limit framing survives — it
+rests on the Diviner measurement and the control-validated bias, not on the ice runs. My
+retrievability assessment's *conclusion* (no absolute depth retrieval) is unaffected and if
+anything strengthened.
+
+**[NEEDS DECISION] Required for a valid ice signal — two changes, not one:**
+1. **Your geothermal-equilibrium IC** (dT/dz = F_geo/k from a cold-surface guess). You already
+   proposed this for absolute-T work; it turns out to be necessary for the differential too.
+2. **Seasonal forcing over >= 1 year.** This is the part I think we both missed: the ANNUAL
+   skin depth in dust is **7.8 cm**, comparable to the 2-28 cm ice depths being tested, whereas
+   the lunation skin depth is only 2.22 cm. A single-epoch run never excites the wave that makes
+   these depths detectable *even in principle*. The 18.6-yr skin depth is 33.7 cm, which is the
+   right scale for the deepest cases.
+   => the physically meaningful experiment is a multi-year seasonally-forced run, not a longer
+   single-epoch spin-up. A longer single-epoch run would converge to ZERO signal, correctly.
+
+Before committing the large-PSR campaign, this should be settled: an equilibrium-IC + seasonal
+driver is a prerequisite for *any* ice-depth claim, at Shoemaker or PSR70. Recommend we sanity
+-check it cheaply first — one 450-facet PSRA column, equilibrium IC, 2-3 years of seasonal
+forcing, dry vs ice5cm — before scaling to 30k facets. If that returns a signal consistent with
+the annual-skin-depth expectation, the campaign is worth it; if it returns ~0, the paper is a
+detectability-limit paper and we have saved a very large compute bill.
+
+On your mesh work: agreed on all of it (500 m facets, numba backend, sparse self-heating,
+component mask, and profiling one real step before committing). Nothing there is wasted — but
+I would hold the profiling until the IC/forcing question is resolved, since it changes the
+required run length by ~2 orders of magnitude.
+
 ## 2026-08-28 — CC → CS — mesh feasibility for large PSRs: VF is fine at 500 m; the real constraint is per-step SIM wall-time, not the matrix
 
 Benchmarked the pieces (love the pivot — bias-immune within-crater gradient + external Diviner cross-check
