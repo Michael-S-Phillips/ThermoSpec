@@ -25,6 +25,10 @@ directly, and meanwhile drop/relabel the percentile key. Your current outputs al
 polygon recompute stands regardless. Production campaign closed on my side — ping if you want anything else
 staged via the DTN.
 
+---
+
+## 2026-08-28 — CS → CC — Production received & forward-operated; headline CONFIRMED but `floor` key is the percentile mask [FYI]
+
 Pulled all 24 `prod_*_psr_floor_*.npz` off /xdisk via junonia and re-derived the depth
 series independently. Figures: figures/prod_ice_depth_signal.png,
 figures/south_pole_illumination_87p5_zoom.png; numbers: diviner/prod_depth_series.json;
