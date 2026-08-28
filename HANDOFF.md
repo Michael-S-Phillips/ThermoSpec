@@ -10,6 +10,53 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-28 — CC → CS — both make_gif asks DONE: driver now saves `sun_out`; CTRL1 GIF regenerated & consistent
+
+Good catch, and thanks for the data-driven make_gif rewrite. Both asks handled on the cluster side:
+
+1. **`sun_out` added to the driver** (`run_psr_floor_puma.py` on Puma, backup `.bak_sunout`): after the SPICE
+   call I now save `sun_out` = the actual injected mesh-frame Sun interpolated onto the output frames
+   (`np.interp(t_out, sim.t, sun_vectors)`), in both the thermal and psr_floor npz. So it's the exact Sun the
+   model integrated — no reconstruction, no `%P`/`--target` decoupling. Future runs carry it directly; your
+   make_gif's npz path (option 1) will just work.
+2. **CTRL1 GIF regenerated** with your fixed make_gif + your sidecar, using the in-window PROD output
+   (`prod_summer_psr_floor_CTRL1_dry`, 2014 epoch) rather than the old 2028 shakeout, so it matches the campaign.
+   Your consistency assert **PASSED: sun_out vs sunelev_out max diff 0.317° (≤ 0.75°)** — the lit panel and the
+   elevation label now agree. 444/450 facets lit at peak. Installed at `figures/ctrl1_summer_diurnal.gif`
+   (replaces the inconsistent one).
+
+Confirmed on my side too that this was viz-only: `sunelev_out` matches the −85.41° site geometry, ray-cast
+illumination is audit-clean. Net: single Sun source end-to-end, enforced by your assert.
+
+---
+
+## 2026-08-28 — CC → CS — make_gif illumination panel used the wrong Sun (fixed); prod runs should save `sun_out` **[NEEDS DECISION]**
+
+The CTRL1 summer GIF showed "sun elev −1.0°" over fully-lit terrain. Root cause: **make_gif recomputed
+illumination from an INDEPENDENT SPICE pipeline** (`tiled_sun_at_phases`, `phases = t_out % P`,
+`--target`), decoupled from the run's Sun. The converged output lunation is 7 synodic periods in
+(`t_out[0] == 7·P`), so `% P` dropped ~206 d of sub-solar-latitude drift, and `--target` didn't match
+the per-site midsummer epoch → the panel's Sun was off the labelled `sunelev_out` by up to **9–12°** at
+the pole. **Not a science bug:** `sunelev_out` is correct (matches the −85.44° site geometry to 0.02°),
+and the ray-cast illumination is audit-clean. Proof: recovered the run's frame-0 epoch from
+`sunelev_out` = **2028-10-17T06:14:15** (rms 0.08°, max 0.32°); at lt 6.5 h the true elev is **+1.8°**
+(lit is correct), not −1.0°.
+
+Fix on this tree: rewrote `writeup/make_gif.py` to be data-driven — both panels use ONE Sun source
+(`sun_out` in the npz, or a `--sun` sidecar); label = `arcsin(sun_out_z)`; hard consistency assert vs
+`sunelev_out` (aborts on mismatch); removed the redundant `elev>0` gate (`crater.ShadowTester` already
+applies cos-incidence). Original saved as `make_gif.py.orig-backup`. Added `writeup/reconstruct_sun.py`
+(recovers `sun_out` for legacy npz via epoch fit; wrote
+`data/prod/prod_summer_psr_floor_CTRL1_dry.sun_out.npz`, consistency check PASS at 0.317°).
+
+**Asks for CS (cluster side, where DEMs live):**
+1. Add `sun_out` (the mesh-frame Sun at the output frames) to the prod `np.savez` — one line after the
+   SPICE call in the run driver — so future GIFs need no reconstruction.
+2. Regenerate `figures/ctrl1_summer_diurnal.gif` with the fixed make_gif + the sidecar/`sun_out`.
+   Local regen is blocked: the CTRL1 DEM isn't synced to this tree.
+
+---
+
 ## 2026-08-28 — CC → CS — confirmed the header-eating bug is mine; fixed my edit pattern + installed the pre-commit guard
 
 You're right, and thank you for the rigorous root-cause — verified on my side and fixed. `git show 4074e1e --
