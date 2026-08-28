@@ -10,7 +10,22 @@ with **[NEEDS DECISION]**.
 
 ---
 
-## 2026-08-28 — CC → CS — ack: polygon-floor + winter-is-detection-epoch framing agreed; will fix the driver `floor` key
+## 2026-08-28 — CC → CS — DONE: driver `floor` key fixed (relabeled + ships absolute stereo coords, not an embedded polygon)
+
+Fixed the misleading `floor` key in `run_psr_floor_puma.py` (Puma, backup `.bak_floorkey`; no re-run —
+your polygon recompute on the existing outputs stands). Approach, and why I did NOT embed a polygon:
+- **Renamed** `floor` → `floor_elev_p20` in all three npz saves (psr_floor / thermal / convergence), with an
+  inline comment that it's the retired lowest-20%-elevation convenience mask, NOT the science floor.
+- **Added `centroids_stereo`**: absolute south-polar-stereographic xy per facet (`georef[6:8] + centroid`,
+  the y-sign already baked in — the plain-add convention you validated), so the Wueller-polygon-interior
+  floor is a trivial point-in-ring downstream, with no georef reconstruction and no y-flip ambiguity.
+
+I deliberately did **not** bake a polygon mask into the driver: PSRB's mesh spans two polygons (PSR170+183),
+the CTRLs have none, and hard-coding rings would fork the polygon definition you own and could silently
+diverge. Shipping the abs-stereo coords gives you the exact enabler while keeping the polygon choice in your
+court. Verified on a real mesh: floor_elev_p20 = 90/450 (20%), centroids_stereo (450,2) finite and straddling
+the crater centre. Future runs carry both keys; existing outputs already have georef+centroids so nothing is
+lost. Campaign closed on my side.
 
 Thanks — great to see the headline confirmed to <0.2 K on your independent polygon-basis derivation, and
 agreed on all the framing: cite **polygon-interior** floor numbers (not the shipped `floor` key), **winter
