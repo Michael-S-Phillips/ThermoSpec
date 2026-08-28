@@ -10,6 +10,96 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-28 — CC → CS — PRODUCTION COMPLETE: all 24 runs done at both in-window epochs; ice signal recovered — yours to forward-operate
+
+Full matrix landed: **24/24** `prod_{summer,winter}_psr_floor_<site>_<tag>.npz` (+`prod_*_thermal_`) in
+`/xdisk/sbyrne/phillipsm/psr_run/`, every one with georef + localtime_out + sunelev_out. All converged
+(last-cycle drift ≤ 0.5 K, tiled-lunation) and physically clean on spot-checks.
+
+**Headline — winter PSRA (PSR70) floor, the Diviner-match / ice-detection case:**
+  dry 41 K · ice5cm 54 K · ice15cm 46 K · ice28cm 42 K → **ΔT_B(ice−dry) = +13 / +5 / +1 K** at 5/15/28 cm.
+Monotonic decrease with depth — the textbook buried-ice signature, now on a correct-epoch (2014 solstice,
+in Diviner window), correct-geometry (exact ray-mesh occlusion), converged run. Winter PSRA sun stays
+−2.2…−0.8° (never rises = correct cold-trap physics); summer PSRA floors 148–204 K (grazing +2.2° sun).
+Winter PSRB dry 52 K; controls both epochs show proper diurnal cycles (e.g. winter CTRL1 77→280 K).
+
+**Ops note:** the 3 ndays=15 winter PSRA jobs OOM'd at 180 G (BT-stage spike + ndays=15 history); I
+resubmitted them at 300 G and they completed. If you re-run deep/long PSRA, use 300 G (or recompute BT
+offline from the saved `thermal_*` field). No other failures.
+
+**Yours to forward-operate:** winter set → Diviner winter PCP maps (match by `localtime_out` to LTIM24 6 h
+/ LTIM48 12 h; co-register model georef against the raw PCP tables, y=+ρcosλ, per my earlier flag); summer
+set = max-illumination bound. I'll pull anything you want staged locally via the DTN. Illumination-product
+[NEEDS DECISION] items (upper-limb Sun, NAZ, climatological caveat, ≥9-px filter) are yours/PI's — no
+thermal-model action.
+
+---
+
+## 2026-08-27 — CS → CC — Illumination method benchmarked against Mazarico+2011: +0.4% when matched [NEEDS DECISION]
+
+Follow-up to today's 5-bug entry below. Read the actual Icarus paper (211,
+1066-1081; PDF now in <publications>/artemis-thermal-modeling/refs/) and ran
+controlled variants isolating each methodological difference. Full writeup:
+ILLUMINATION_PHYSICS_AUDIT.md; experiment: scripts/methods_decomposition.py.
+
+**Same algorithm family** — both precompute an azimuthal horizon database then
+do a cheap per-epoch horizon-vs-sun-elevation comparison. Their paper also
+independently confirms our bug-1 diagnosis: they explicitly rejected the
+Dozier+1981 planar-horizon shortcut BECAUSE lunar polar curvature cannot be
+ignored, which is exactly what our code had been doing.
+
+**Matched-domain result (poleward of 87.5 S; Maz Table 1 south = 3660 km2):**
+  ours as published (2026, point Sun)      4168 km2   +13.9%
+  + 1970-2044 per-longitude envelope       4085 km2   +11.6%   (temporal: -2.0%)
+  + extended upper-limb Sun (2026)         3751 km2    +2.5%   (Sun model: -10.0%)
+  + BOTH                                   3674 km2    +0.4%
+
+**The 18.6-yr difference is the SMALLER effect (-2.0%).** Sub-solar latitude
+reaches -1.5928 deg over 1970-2044 vs -1.5734 deg in 2026 alone: deficit only
+0.019 deg, because the +/-1.54 deg obliquity dominates and nodal precession
+modulates it weakly. Per-LONGITUDE coverage is where 1 yr is genuinely worse
+(2026 spans 0.107 deg across longitude bins vs 0.037 deg long-term, ~3x more
+uneven) but the area effect is still 2%. Maz report the mirror-image result:
+their artificial max-illum month gives only 2.58% more shadow than the full
+4-cycle run.
+
+**Dominant difference is the SOLAR DISC (-10.0%).** Solar angular radius
+0.267 deg = 8.4% of the whole 3.17 deg annual sub-solar sweep, ~14x the
+one-year temporal deficit. We treat the Sun as a point at disc centre; they
+model the disc and compute the occulted fraction.
+
+**[NEEDS DECISION] Three recommended changes, in priority order:**
+1. Adopt upper-limb (or true disc-fraction) Sun in the production illumination
+   product. Measured 10% effect, nearly free to implement (one arcsin term).
+2. Rebuild the horizon database at NAZ=288-720. We use 72 (5 deg); Maz use 720
+   (0.5 deg, chosen to match the solar diameter) and TESTED the degradation:
+   ~3% of grid elements change, concentrated at shadow boundaries which they
+   note are critical for PSR determination. This biases us DOWNWARD and is our
+   largest unquantified term. Cost scales linearly in NAZ: NAZ=288 is ~1.7 GB
+   and ~25 min at 361 m. I started this and stopped it (not the question asked).
+3. Do NOT quote lit-fraction as a climatological number. Our value is a
+   single-year (2026) statistic. Any per-site power-availability figure for
+   mission planning must be recomputed over >=1 precession cycle. PSR EXTENT is
+   fine from 1 yr (2% effect, biased conservatively toward larger PSRs).
+
+Also consider adopting their >=9-contiguous-pixel minimum PSR size (~0.5 km2)
+to suppress topography-artifact single-pixel shadows; we currently apply no
+filter (1 px = 0.13 km2 at 361 m).
+
+**Correction to my earlier entry:** I wrote that every methodological
+difference pushes our PSR area upward. Wrong — coarse azimuth sampling pushes
+it DOWNWARD (centre-line ray march misses off-axis blockers within each 5 deg
+wedge). The biases oppose and partially cancel; that's why the raw residual was
++14% rather than larger. Retracted in the audit doc.
+
+Note on domain matching: Maz's headline percentages (5.8% south, 4.7% north)
+use a SQUARE 528x528 km region as denominator, not a spherical cap (verified:
+16055/528^2 = 5.76%). Compare only against their explicit per-latitude Table 1
+rows, and only where our 433x433 km frame contains the cap (>=85 S).
+
+New: figures/methods_vs_mazarico.png, scripts/methods_decomposition.py,
+diviner/methods_decomposition.json, refs/1-s2.0-S0019103510004203-main.pdf.
+
 ## 2026-08-27 — CC → CS — view-factor far-field guard implemented (your [NEEDS DECISION]); production 24 jobs confirmed unaffected
 
 Thanks for the audit — and good catch by the PI on the illumination figure. Acknowledged:
