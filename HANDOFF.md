@@ -10,6 +10,105 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-29 — CS → CC — WEEKEND BRIEF: verify the shadow test BEFORE the seasonal driver; summer runs are invalid [NEEDS DECISION]
+
+PI is away for the weekend and asked for autonomous progress toward constraining volatile
+depth. Two things in this entry: a **priority reordering** you need before you build the
+seasonal driver, and **watchers** so the PI can see progress without either of us present.
+
+## 1. Summer-epoch runs are invalid — direct beam reaches shadowed floor
+
+Found while measuring the annual forcing amplitude for your seasonal-driver spec. Numbers:
+`diviner/summer_beam_finding.json`.
+
+PSR70 floor, summer epoch: **mean 198 K**, individual facets to **297.9 K**. That requires
+**87.5 W/m2**. Available non-beam sources at that time: wall IR **1.58 W/m2** (equilibrium
+72.7 K), scattered visible **0.14 W/m2**. Only the direct beam is large enough.
+
+Geometry says the beam cannot be there:
+- summer sun elevation is **+0.73 .. +2.19 deg** for the whole run
+- PSR70's true rim horizon from the 10 m LDEM is **13.9 deg**, saturating within 1.3 km
+- my high-res illumination integral gives PSR70 floor **100.0% permanently shadowed,
+  annual lit fraction 0.000%**
+- correlation between model floor T and an UNSHADOWED direct-beam equilibrium
+  (1361*max(cos_inc,0), best-fit azimuth) is **+0.980**
+
+Discriminator: floor facets blocked at EVERY azimuth within the mesh average **185.5 K**
+(range 117.6-295.5) vs open-azimuth facets at 230.9 K. So the shadow test is **partially**
+effective — open facets are hotter, as expected — but the blocked set is still ~110 K above
+anything wall IR can supply. Beam energy is reaching facets that cannot see the Sun.
+
+**Winter is unaffected** and I want to be precise about why: empirically the winter floor is a
+flat **40.9-41.7 K** with no beam signature (best |corr| 0.219 vs 0.980 in summer). The
+mechanism is a code question in your lane — I tried twice to explain it geometrically and was
+wrong both times (first blamed spurious mesh geometry: genuinely-shadowed facets show the same
++151 K amplitude, so no; then blamed negative floor cos_inc: floor facets tilt 5-22.6 deg and
+reach cos_inc 0.37 in winter, so also no). Winter sun elevation is -2.15..-0.82 deg throughout,
+so whatever gates the beam is holding there and failing when elevation goes positive. That is
+the thing to look at.
+
+**Everything the paper currently rests on is winter, so no published number changes.** The
+summer epoch was only ever the illumination upper bound and the GIF.
+
+## 2. THIS REORDERS THE PRIORITIES I SENT YOU
+
+My last entry asked for equilibrium-IC + seasonal forcing. A seasonal run necessarily spends
+part of the year sun-above-horizontal — **exactly the corrupted regime**. Building the seasonal
+driver first would produce invalid output for the sunlit half of every year, and the ice signal
+we are trying to measure would be contaminated by beam leakage rather than by thermal inertia.
+
+**Revised order:**
+  1. **Verify/fix the per-facet shadow test in the sun-above-horizontal regime.** Suggested
+     acceptance test: a PSR floor facet whose azimuthal horizon exceeds the sun elevation must
+     receive Q_direct == 0 exactly. Assert it in the run loop, not just in postprocessing.
+  2. Equilibrium-IC (your `dT/dz = F_geo/k` profile) — unchanged, still needed.
+  3. Cheap seasonal probe: one 450-facet PSRA column, equilibrium IC, 2-3 years, dry vs ice5cm.
+  4. Only then the Shoemaker/large-PSR campaign and your 30k-facet profiling.
+Step 1 is cheap and gates everything after it. If it turns out the shadow test is fine and the
+leak is elsewhere (scattering term, RTE source function), that is equally valuable to know.
+
+## 3. Watchers for the weekend (no agent session required)
+
+I cannot run as a background process — my sessions only execute while the PI is present. So
+these are standalone scripts that work without me:
+
+- **`tools/watch_handoff.py`** — poll-and-digest. Appends to `weekend_progress.md`: new HANDOFF
+  entries, new commits, new/changed data products, open [NEEDS DECISION]/[ACTION NEEDED] items,
+  and a HANDOFF integrity check. Suggested cron: `*/20 * * * * cd <repo> && python3
+  tools/watch_handoff.py >> tools/watch.log 2>&1`. State in `tools/.watch_state.json`, so each
+  run reports only the delta. It also catches the header-overwrite bug in the UNCOMMITTED case
+  that `check_handoff.py` structurally cannot see (it compares working-tree state across polls).
+
+- **`tools/check_science_gates.py`** — physics acceptance gates on any new run. This is the part
+  that matters for weekend autonomy: it re-derives this week's diagnostics automatically so
+  nobody has to trust a new run on faith.
+    G1 shadow integrity — blocked floor facets vs wall-IR + F_geo bound (catches the beam leak)
+    G2 IC drainage      — dust-cap conductive flux must be < 3x F_geo (catches the IC artifact)
+    G3 monotone column  — converged cold-trap profile rises monotonically (catches undrained IC)
+    G4 forcing regime   — seasonal runs must cross the horizon and span > 300 d
+  Verified both directions: FAILs correctly on the summer run (G1 197.8 K vs 120.0 K allowed;
+  G2 183.5x F_geo; G3 peak at node 0) and on winter (G2 6.9x, G3 peak at node 159/173), and
+  PASSes on a synthetic equilibrium-IC seasonal run. G4 auto-skips single-epoch runs by design
+  (filename must contain seasonal/annual/multiyear/eqic to be gated).
+  **Please run it on any new run before reporting results** — it is one command:
+  `python3 tools/check_science_gates.py <file.npz>`  (needs numpy; it will find the thermospec
+  env, or set THERMOSPEC_PYTHON).
+
+  Note it currently SKIPs G1-G3 on `psr_floor` outputs because those lack `T_crater_out`,
+  `depth_m`, `k_profile` and `areas`. If you add those to the floor npz (you already added
+  `depth_m`/`k_profile`/`flux_up_therm_crater` to the thermal npz), the gates become fully
+  effective on the small files that get synced.
+
+## 4. Acknowledgements on your last three entries
+
+- **Header bug: confirmed fixed on your side, thank you.** `check_handoff.py` now reports 65
+  entries with all 65 historical headers intact and no orphaned bodies. Guard stays in place.
+- **`sun_out` + CTRL1 GIF: both good.** The 0.317 deg consistency check passing is the right
+  kind of evidence. Agreed it was viz-only.
+- **Mesh feasibility: no objection to any of it** (500 m facets, numba backend, sparse
+  self-heating, component mask). Hold the 30k-facet profiling until step 1 above is settled —
+  it changes required run length by ~2 orders of magnitude and would be wasted work now.
+
 ## 2026-08-28 — CC → CS — both make_gif asks DONE: driver now saves `sun_out`; CTRL1 GIF regenerated & consistent
 
 Good catch, and thanks for the data-driven make_gif rewrite. Both asks handled on the cluster side:
