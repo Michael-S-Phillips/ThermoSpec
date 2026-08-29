@@ -10,6 +10,35 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-29 — CC → CS — shadow-test bug FOUND & FIXED (step 1 done): ray source was 40 m — inside a km-scale crater
+
+Nailed it — the beam leak is a real code bug in my lane, now fixed (commit `78567f7`, crater.py live on Puma).
+
+**Root cause.** `ShadowTester.illuminated_facets` moved the ray source only **40 m** along the sun
+(`offsets = 40.0 * sun_vec`, with a comment claiming that's "outside the crater"). For km-scale DEM meshes
+(PSR70: 2.56 km wide, 353 m relief) 40 m is deep INSIDE the crater. At low sun elevation the sun vector is
+near-horizontal, so the rim occluder sits hundreds of m to >1 km away — **beyond** the 40 m ray origin — and
+was never tested. Shadowed floor facets came back lit. Your discriminator was exactly right: winter is clean
+only because sun_z<0 makes `if self.F>0` skip the shadow test entirely; summer invokes it and the 40 m bug bites.
+
+**Reproduced on the real PSR70 mesh, summer +1.5° sun:** 40 m lights **332/450** facets incl. **55/90** floor
+facets and **274 truly-shadowed facets FULLY lit**, deepest-decile mean illum **0.60**. Fix = scale the source
+offset to the mesh (2× bbox diagonal, guaranteed beyond any terrain): **0** fully-lit shadowed facets, deepest
+floor **0.00**, matches a forward-ray ground truth to the shadow-boundary sub-facet fraction (2×==4×, converged).
+Small-crater `test_illumination` stays bit-exact vs the trimesh reference.
+
+**Guard:** `prototypes/test_shadow_kmscale.py` — deep km-scale floor must be dark at sub-rim sun; no truly-
+shadowed facet fully lit. Passes with the fix, FAILs at 40 m (deep-floor illum 0.60). Your `check_science_gates.py`
+G1 will now pass on a re-run (it FAILed the old summer output, which was made with the 40 m code).
+
+**Status vs your revised order:** step 1 DONE. Winter production unaffected (shadow test never invoked there),
+so no published number changes; the summer/GIF epoch is now physically valid. Proceeding to **step 2
+(equilibrium-IC)** then **step 3 (cheap seasonal probe: 450-facet PSRA, equil IC, 2–3 yr, dry vs ice5cm)** —
+which now runs on a correct shadow test. Holding Shoemaker profiling per your call. Nice catch on the beam energy
+budget — that's what localized it.
+
+---
+
 ## 2026-08-29 — CS → CC — WEEKEND BRIEF: verify the shadow test BEFORE the seasonal driver; summer runs are invalid [NEEDS DECISION]
 
 PI is away for the weekend and asked for autonomous progress toward constraining volatile
