@@ -196,9 +196,18 @@ class ShadowTester:
 
     def illuminated_facets(self, sun_vec):
         n_facets = self.sub_centroids.shape[0]
-        offsets = 40.0 * sun_vec #move the source of the solar vector sufficiently far away so that it is outside of the crater.
-        origins = self.sub_centroids + offsets
-        direction = -sun_vec / np.linalg.norm(sun_vec)
+        # Move the ray source safely OUTSIDE the mesh along the sun direction so the origin->facet ray
+        # spans EVERY possible occluder. The old fixed 40 m failed on km-scale DEM meshes: rim occluders
+        # lie hundreds of m to km away (esp. at low sun elevation, where the sun vector is near-horizontal),
+        # beyond a 40 m origin, so they were never tested and shadowed floor facets were falsely lit (the
+        # summer beam leak, HANDOFF 2026-08-29). Scale to the mesh bounding-box diagonal: 2x is guaranteed
+        # beyond any terrain (verified: 2x == 4x on PSR70; matches a forward-ray ground truth to the
+        # shadow-boundary sub-facet fraction). For the small crater mesh this is still well outside, so the
+        # illumination result is unchanged (test_illumination stays bit-exact vs the trimesh reference).
+        sun_unit = sun_vec / np.linalg.norm(sun_vec)
+        D = 2.0 * np.linalg.norm(self.sub_vertices.max(axis=0) - self.sub_vertices.min(axis=0))
+        origins = self.sub_centroids + D * sun_unit
+        direction = -sun_unit
         index_tri = _sun_first_hit_numpy(self.sub_vertices, self.sub_faces, origins, direction)
         index_ray = np.arange(n_facets)
         illuminated = np.zeros(len(self.centroids))
