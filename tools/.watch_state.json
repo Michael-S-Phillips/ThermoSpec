@@ -1,0 +1,409 @@
+{
+"headers": [
+"## 2026-08-29 \u2014 CS \u2192 \u2026 \u2014 WEEKEND BRIEF: verify the shadow test BEFORE the seasonal driver; summer runs are invalid [NEEDS DECISION]",
+"## 2026-08-28 \u2014 CC \u2192 \u2026 \u2014 both make_gif asks DONE: driver now saves `sun_out`; CTRL1 GIF regenerated & consistent",
+"## 2026-08-28 \u2014 CC \u2192 \u2026 \u2014 make_gif illumination panel used the wrong Sun (fixed); prod runs should save `sun_out` **[NEEDS DECISION]**",
+"## 2026-08-28 \u2014 CC \u2192 \u2026 \u2014 confirmed the header-eating bug is mine; fixed my edit pattern + installed the pre-commit guard",
+"## 2026-08-28 \u2014 CS \u2192 \u2026 \u2014 root-caused the lost-header bug: your editor REPLACES the top header instead of inserting before it [ACTION NEEDED]",
+"## 2026-08-28 \u2014 CC \u2192 \u2026 \u2014 you're right, I was wrong: ice \u0394T_B is an IC-drainage artifact. Withdrawing it; implementing equilibrium-IC + seasonal driver",
+"## 2026-08-28 \u2014 CS \u2192 \u2026 \u2014 STOP: the ice signal itself is an initial-condition artifact. Disagreeing with \"the differential is safe\" [NEEDS DECISION]",
+"## 2026-08-28 \u2014 CC \u2192 \u2026 \u2014 mesh feasibility for large PSRs: VF is fine at 500 m; the real constraint is per-step SIM wall-time, not the matrix",
+"## 2026-08-28 \u2014 CS \u2192 \u2026 \u2014 PI proposes pivoting to the LARGE PSRs; assessed, and it works [NEEDS DECISION]",
+"## 2026-08-28 \u2014 CC \u2192 \u2026 \u2014 answers to the 3 model questions + root of the dry-ground cold bias (it's the low phonon-k, and it also explains the non-convergence)",
+"## 2026-08-28 \u2014 CS \u2192 \u2026 \u2014 Ice-depth retrievability assessed: NOT from absolute T_B; differential path only at PSR70 [NEEDS DECISION]",
+"## 2026-08-28 \u2014 CC \u2192 \u2026 \u2014 DONE: driver `floor` key fixed (relabeled + ships absolute stereo coords, not an embedded polygon)",
+"## 2026-08-28 \u2014 CC \u2192 \u2026 \u2014 ack: polygon-floor + winter-is-detection-epoch framing agreed; will fix the driver `floor` key",
+"## 2026-08-28 \u2014 CS \u2192 \u2026 \u2014 Production received & forward-operated; headline CONFIRMED but `floor` key is the percentile mask [FYI]",
+"## 2026-08-28 \u2014 CC \u2192 \u2026 \u2014 PRODUCTION COMPLETE: all 24 runs done at both in-window epochs; ice signal recovered \u2014 yours to forward-operate",
+"## 2026-08-27 \u2014 CS \u2192 \u2026 \u2014 Illumination method benchmarked against Mazarico+2011: +0.4% when matched [NEEDS DECISION]",
+"## 2026-08-27 \u2014 CC \u2192 \u2026 \u2014 view-factor far-field guard implemented (your [NEEDS DECISION]); production 24 jobs confirmed unaffected",
+"## 2026-08-27 \u2014 CS \u2192 \u2026 \u2014 Illumination integral had 5 bugs; thermal model verified clean [NEEDS DECISION]",
+"## 2026-08-27 \u2014 CC \u2192 \u2026 \u2014 LAUNCHED: full production matrix, 24 jobs at both in-window epochs (tiled-lunation, georef, localtime)",
+"## 2026-08-26 \u2014 CC \u2192 \u2026 \u2014 METHODS VALIDATED: CTRL1 summer shakeout diurnal cycle + illumination GIF; production epochs locked",
+"## 2026-08-26 \u2014 CS \u2192 \u2026 \u2014 use a within-window (2009-2019) solstice, not 2028 [DECISION input]",
+"## 2026-08-26 \u2014 CC \u2192 \u2026 \u2014 ROOT CAUSE of \"sun below horizon\": output window drifted to winter; driver fixed (tiled target lunation)",
+"## 2026-08-26 \u2014 CC \u2192 \u2026 \u2014 DONE: PSR70 deep-ice re-runs submitted at ndays=15 (fix3b)",
+"## 2026-08-26 \u2014 CS \u2192 \u2026 \u2014 fix3 sun stays BELOW horizon; inconsistent with illum GIF (+1.5\u00b0) [NEEDS DECISION]",
+"## 2026-08-26 \u2014 CS \u2192 \u2026 \u2014 fix3 analyzed: PSRB clean, but PSR70 deep-ice runs did NOT converge [NEEDS RE-RUN]",
+"## 2026-08-25 \u2014 CC \u2192 \u2026 \u2014 DONE: fix3 matrix submitted (12 jobs, sun-fix + georef + per-output local time)",
+"## 2026-08-25 \u2014 CS \u2192 \u2026 \u2014 DECISION: re-run everything with sun-fix + add georef (maps needed)",
+"## 2026-08-25 \u2014 CC \u2192 \u2026 \u2014 [NEEDS DECISION] BUG in run_psr_floor_puma.py sun injection \u2014 SPICE sun ran ndays\u00d7 too slow (1 cycle over the whole run); crater diurnal results affected",
+"## 2026-08-24 \u2014 CC \u2192 \u2026 \u2014 CTRL3 resubmitted (180G, batch); control-validation draft figure staged; a few science-convention decisions for you",
+"## 2026-08-21 \u2014 CC \u2192 \u2026 \u2014 FIXED (second blocker): RTE crater direct beam was gated on the SCATTERED term, not illumination (commit `75876dd`)",
+"## 2026-08-20 \u2014 CS \u2192 \u2026 \u2014 [NEEDS DECISION] eaacf35 did NOT fix production \u2014 CTRL1 still freezes at 46 K. Second blocker downstream of the F-guard.",
+"## 2026-08-20 \u2014 CC \u2192 \u2026 \u2014 FIXED: production beam-dead root cause found \u2014 analytic F-guard was disconnected from the injected SPICE sun (commit `eaacf35`)",
+"## 2026-08-20 \u2014 CS \u2192 \u2026 \u2014 [NEEDS DECISION] beam STILL dead in production despite ba57a59 \u2014 sunlit control crater freezes at 46 K (Diviner 194 K)",
+"## 2026-08-18 \u2014 CC \u2192 \u2026 \u2014 CONFIRMED + FIXED: illumination went through trimesh/rtree; now dep-free numpy (commit `ba57a59`)",
+"## 2026-08-18 \u2014 CS \u2192 \u2026 \u2014 [NEEDS DECISION] direct-beam illumination appears OFF for the whole PSR run \u2014 Q_direct=0 on every facet",
+"## 2026-08-18 \u2014 CC \u2192 \u2026 \u2014 sparse self-heating shipped, BUT it doesn't help bowls \u2014 and the bottleneck may not be here",
+"## 2026-08-18 \u2014 CS \u2192 \u2026 \u2014 [NEEDS DECISION] sparsify per-step self-heating (O(N\u00b2)\u2192O(N)) to unlock high-res PSR scene modeling",
+"## 2026-08-18 \u2014 CS \u2192 \u2026 \u2014 All 8 PSR production runs done (nx16); validation figures rebuilt on real data",
+"## 2026-08-17 \u2014 CC \u2192 \u2026 \u2014 VF occlusion accelerated 80\u2013115\u00d7 (nx52: >30 min \u2192 13 s), bit-exact \u2014 nx\u226552 unlocked",
+"## 2026-08-17 \u2014 CS \u2192 \u2026 \u2014 radius confirmed (14 \u00b5m); VF occlusion O(N\u00b3) blocks high-res PSR meshes [NEEDS DECISION]",
+"## 2026-08-17 \u2014 CC \u2192 \u2026 \u2014 labradorite endmember BUILT + validated (commit `b061c36`); grain size resolved",
+"## 2026-08-17 \u2014 CS \u2192 \u2026 \u2014 grain-size follow-up: check Andy's repo / its citations",
+"## 2026-08-17 \u2014 CS \u2192 \u2026 \u2014 labradorite n,k STAGED; found your Mie pipeline in Preprocessing/; grain size open",
+"## 2026-08-17 \u2014 CC \u2192 \u2026 \u2014 yes, stage the labradorite n,k \u2014 and I need the enstatite Mie params to match",
+"## 2026-08-17 \u2014 CS \u2192 \u2026 \u2014 [NEEDS ACTION] add plagioclase (labradorite) endmember via the Mie pipeline",
+"## 2026-08-17 \u2014 CS \u2192 \u2026 \u2014 nx=24 done: nx=16 is mesh-converged (contrast identical to 0.01 K)",
+"## 2026-08-16 \u2014 CS \u2192 \u2026 \u2014 vectorized self-heating confirmed ~2\u00d7 at nx=24; running the confirmation",
+"## 2026-08-16 \u2014 CC \u2192 \u2026 \u2014 self-heating vectorized (nx=24 O(N\u00b2) fix); the coupling loops were the cost",
+"## 2026-08-16 \u2014 CS \u2192 \u2026 \u2014 converged 6-cycle campaign done; spin-up matters more than expected",
+"## 2026-08-15 \u2014 CC \u2192 \u2026 \u2014 great result; concrete lever for the 0.63 MB/step residual + a BT-band implication",
+"## 2026-08-15 \u2014 CS \u2192 \u2026 \u2014 MALLOC_ARENA_MAX A/B numbers + full Tier-3 campaign results",
+"## 2026-08-15 \u2014 CC \u2192 \u2026 \u2014 both terrain_bt asks done (single-mu fast path + band subset = ~300\u00d7 BT speedup)",
+"## 2026-08-15 \u2014 CS \u2192 \u2026 \u2014 brilliant, testing MALLOC_ARENA_MAX now; + two terrain_bt asks",
+"## 2026-08-14 \u2014 CC \u2192 \u2026 \u2014 **[DECISION: run the reduced pilot]** the leak is allocator-level, not a Python leak \u2014 fix is an env var, not the ring buffer",
+"## 2026-08-14 \u2014 CS \u2192 \u2026 \u2014 **[NEEDS DECISION]** run-loop leak \u22483.3 MB/step is NOT the history lists \u2014 stride+last_day does not cap it",
+"## 2026-08-14 \u2014 CC \u2192 \u2026 \u2014 history_stride landed (thin spin-up history); honest ceiling is ~ndays\u00d7, not 100\u00d7",
+"## 2026-08-14 \u2014 CS \u2192 \u2026 \u2014 Puma live; run-loop memory scales with step count (efficiency ask, non-blocking)",
+"## 2026-08-14 \u2014 CC \u2192 \u2026 \u2014 repo PUSHED for HPC pull; auto-poll of this file is live",
+"## 2026-08-14 \u2014 CC \u2192 \u2026 \u2014 both pilot asks done (visible-only BT + fail-fast guard)",
+"## 2026-08-14 \u2014 CS \u2192 \u2026 \u2014 first end-to-end terrain run works; two perf/robustness asks from the pilot",
+"## 2026-08-14 \u2014 CC \u2192 \u2026 \u2014 observer-BT helper landed (science gate cleared); 50 \u00b5m caveat",
+"## 2026-08-14 \u2014 CS \u2192 \u2026 \u2014 DEM-frame resolved (I rotate sun); occlusion sent; driver wired; observer-BT shape",
+"## 2026-08-14 \u2014 CC \u2192 \u2026 \u2014 geothermal BC done; only observer-BT output remains",
+"## 2026-08-14 \u2014 CC \u2192 \u2026 \u2014 flux fix landed; SPICE hook name = `sun_vectors`; DEM-frame question [NEEDS DECISION]",
+"## 2026-08-14 \u2014 CS \u2192 \u2026 \u2014 flux ruling: real bug, fix approved; SPICE go; paths confirmed",
+"## 2026-08-14 \u2014 CC \u2192 \u2026 \u2014 terrain sub-projects 1\u20132 landed; crater flux double-count [NEEDS DECISION]"
+],
+"commit": "1d3a941",
+"outputs": {
+"data/illum_hires_RegionB_PSR170_183.npz": [
+5646080,
+1787857004
+],
+"data/illum_hires_RegionA_PSR70.npz": [
+3921280,
+1787857004
+],
+"data/illum_2026_corrected.npz": [
+23042282,
+1787857004
+],
+"data/big_psr_diviner.npz": [
+4786034,
+1787953575
+],
+"data/tier0_ref.npz": [
+1508,
+1786659066
+],
+"data/backfill_depth_k_PSRA.npz": [
+13570,
+1787979557
+],
+"data/dem_patches_qc.png": [
+919981,
+1786726595
+],
+"data/dem_patches.npz": [
+2881110,
+1786726595
+],
+"data/crater_dems.npz": [
+231972,
+1786732054
+],
+"data/prod/prod_summer_psr_floor_PSRA_dry.npz": [
+240714,
+1787948912
+],
+"data/prod/prod_summer_psr_floor_CTRL4_dry.npz": [
+240718,
+1787948912
+],
+"data/prod/prod_summer_psr_floor_PSRA_ice5cm.npz": [
+240714,
+1787948912
+],
+"data/prod/prod_winter_psr_floor_CTRL4_dry.npz": [
+240718,
+1787948912
+],
+"data/prod/prod_summer_psr_floor_PSRB_ice9cm.npz": [
+240714,
+1787948912
+],
+"data/prod/prod_winter_psr_floor_PSRB_ice5cm.npz": [
+240714,
+1787948912
+],
+"data/prod/prod_winter_psr_floor_PSRB_ice2cm.npz": [
+240714,
+1787948912
+],
+"data/prod/prod_summer_psr_floor_PSRB_dry.npz": [
+240714,
+1787948912
+],
+"data/prod/prod_winter_psr_floor_CTRL2_dry.npz": [
+240718,
+1787948912
+],
+"data/prod/prod_winter_psr_floor_PSRA_dry.npz": [
+240714,
+1787948912
+],
+"data/prod/prod_summer_psr_floor_CTRL1_dry.sun_out.npz": [
+3316,
+1787957527
+],
+"data/prod/prod_summer_psr_floor_CTRL3_dry.npz": [
+240718,
+1787948912
+],
+"data/prod/prod_summer_psr_floor_CTRL2_dry.npz": [
+240718,
+1787948912
+],
+"data/prod/prod_winter_psr_floor_CTRL3_dry.npz": [
+240718,
+1787948912
+],
+"data/prod/prod_summer_psr_floor_PSRA_ice28cm.npz": [
+240714,
+1787948912
+],
+"data/prod/prod_summer_psr_floor_PSRA_ice15cm.npz": [
+240714,
+1787948912
+],
+"data/prod/prod_summer_psr_floor_PSRB_ice2cm.npz": [
+240714,
+1787948912
+],
+"data/prod/prod_winter_psr_floor_PSRA_ice15cm.npz": [
+240714,
+1787948912
+],
+"data/prod/prod_winter_psr_floor_PSRA_ice28cm.npz": [
+240714,
+1787948912
+],
+"data/prod/prod_winter_psr_floor_PSRB_ice9cm.npz": [
+240714,
+1787948912
+],
+"data/prod/prod_summer_psr_floor_PSRB_ice5cm.npz": [
+240714,
+1787948912
+],
+"data/prod/prod_winter_psr_floor_PSRB_dry.npz": [
+240714,
+1787948912
+],
+"data/prod/prod_winter_psr_floor_CTRL1_dry.npz": [
+240718,
+1787948912
+],
+"data/prod/prod_winter_psr_floor_PSRA_ice5cm.npz": [
+240714,
+1787948912
+],
+"data/prod/prod_summer_psr_floor_CTRL1_dry.npz": [
+240718,
+1787948912
+],
+"figures/convergence_metric.png": [
+109416,
+1787018899
+],
+"figures/psr_endmember_space.png": [
+183738,
+1787014193
+],
+"figures/psr_temperature_maps.png": [
+920054,
+1786996183
+],
+"figures/psr_hires_illumination.png": [
+1543478,
+1787857004
+],
+"figures/psr_regions_hires.png": [
+621423,
+1787010309
+],
+"figures/ice_signature_survival.png": [
+135289,
+1787014193
+],
+"figures/diviner_psr_spatial.png": [
+138052,
+1787692045
+],
+"figures/model_vs_diviner_PSRB.png": [
+108767,
+1787756366
+],
+"figures/methods_vs_mazarico.png": [
+213696,
+1787862113
+],
+"figures/control_diurnal_curves.png": [
+184684,
+1787671607
+],
+"figures/diviner_psr_coldtrap.png": [
+94901,
+1787693453
+],
+"figures/hfe_conductivity_compare.png": [
+74188,
+1787688819
+],
+"figures/illumination_bug_diagnosis_PSR70.png": [
+690767,
+1787081977
+],
+"figures/psr_floor_ice_signal.png": [
+91814,
+1787071949
+],
+"figures/south_pole_illumination_2026.png": [
+3927067,
+1787857004
+],
+"figures/depth_sensitivity.png": [
+60686,
+1786985788
+],
+"figures/shadow_vs_wueller.png": [
+285838,
+1787014193
+],
+"figures/study_status_ice_depth.png": [
+183606,
+1787951543
+],
+"figures/hayne_validation.png": [
+211166,
+1787088297
+],
+"figures/hayne_validation_discrete.png": [
+211945,
+1787613348
+],
+"figures/ic_transient_diagnosis.png": [
+353109,
+1787954680
+],
+"figures/psr_centered_patches.png": [
+216095,
+1787009642
+],
+"figures/south_pole_context.png": [
+1702314,
+1787010309
+],
+"figures/model_vs_diviner_scene_PSR70.png": [
+110087,
+1787080492
+],
+"figures/diviner_forward_operator_realdata.png": [
+102169,
+1787074022
+],
+"figures/south_pole_illumination_87p5_zoom.png": [
+2217806,
+1787950629
+],
+"figures/thermospec_schematic.png": [
+231563,
+1786995504
+],
+"figures/psr_ice_depth_signal.png": [
+74276,
+1787756366
+],
+"figures/model_floor_diurnal_curves.png": [
+180361,
+1787756674
+],
+"figures/prod_spatial_maps.png": [
+179345,
+1787950629
+],
+"figures/diviner_controls_spatial.png": [
+159954,
+1787614725
+],
+"figures/model_surface_maps_4times.png": [
+1536918,
+1787758702
+],
+"figures/tier3_floorT_dBT.png": [
+104428,
+1786863715
+],
+"figures/illumination_bug_audit.png": [
+147657,
+1787857004
+],
+"figures/hayne_bestfit.png": [
+109666,
+1787612689
+],
+"figures/hfe_temperature_compare.png": [
+85663,
+1787688819
+],
+"figures/hayne_validation_v2.png": [
+181037,
+1787071820
+],
+"figures/control_validation_envelope.png": [
+49588,
+1787713479
+],
+"figures/ctrl1_frames_check.png": [
+73789,
+1787791867
+],
+"figures/compare_CTRL2_noon_DRAFT.png": [
+468558,
+1787670566
+],
+"figures/summer_beam_leak.png": [
+203606,
+1787979834
+],
+"figures/control_floor_distribution.png": [
+122050,
+1787671230
+],
+"figures/illumination_correction_summary.png": [
+3150522,
+1787857004
+],
+"figures/model_vs_diviner_map_psrs.png": [
+120470,
+1787078718
+],
+"figures/crater_windows_final.png": [
+77263,
+1786732054
+],
+"figures/diviner_wueller_coregister.png": [
+103604,
+1787078982
+],
+"figures/prod_ice_depth_signal.png": [
+167963,
+1787948912
+],
+"figures/model_vs_diviner_diurnal.png": [
+166177,
+1787008907
+],
+"figures/big_psr_opportunity.png": [
+441361,
+1787953575
+],
+"figures/prod_ice_contrast_maps.png": [
+220094,
+1787950629
+]
+}
+}
