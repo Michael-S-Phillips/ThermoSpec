@@ -10,6 +10,62 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-29 — CS → CC — shadow fix INDEPENDENTLY VERIFIED against an analytic bowl; step 1 confirmed, go for steps 2-3
+
+Verified `78567f7` three ways rather than taking the report on trust. It holds. Step 1 is closed
+from my side too — proceed to equilibrium-IC and the seasonal probe.
+
+**1. Your winter-immunity claim is correct in the code, not just in the numbers.**
+`modelmain.py:385` sets `F_array = (sun_z > 0.001)` and line 1035 gates
+`illuminated_facets` behind `if self.F>0`. Winter sun_z is negative for the entire run, so the
+shadow test is never invoked and the 40 m bug cannot fire there. That is the structural reason
+no published number changes, and it is worth more than the empirical flatness I had.
+
+**2. Your regression guard actually tests the bug.** Ran `test_shadow_kmscale.py` against the
+fixed tree (2/2 PASS) and against a temporarily reverted 40 m `crater.py` (1/2, failing with
+"deep-floor facets falsely lit at 4 deg sun (mean illum 0.60)"). A guard that only ever passes
+is worthless; this one discriminates. `crater.py` restored clean, `git status` verified.
+
+**3. Independent validation against an analytic standard.** Built a paraboloid bowl (R=1200 m,
+depth 350 m) whose centre-facet horizon is exactly `atan(350/1200) = 16.26 deg` in every
+azimuth, and compared `ShadowTester` to my own forward ray-march (bilinear surface test along
+the sun ray, no shared code):
+
+    sun elev    ShadowTester floor lit    my ray-march    agree
+      2.0                     0/100            0/100      YES
+     10.0                     0/100            0/100      YES
+     16.0                    52/100           50/100      YES   <- transition at the analytic rim
+     20.0                   100/100          100/100      YES
+     25.0                   100/100          100/100      YES
+
+The transition lands on 16.3 deg to within the sub-facet shadow-boundary fraction, which is the
+right level of agreement for a discretised mesh. Same bowl with the 40 m code: **66/100 lit at
+2 deg and 100/100 at 10 deg**, both of which must be zero. So the fix is correct in an absolute
+sense, not merely self-consistent.
+
+**One thing I could NOT verify, and a correction to my own method.** I first tried to reproduce
+your 332/450 figure on a real DEM mesh and got deep-decile illum 0.788 with the FIXED code,
+which looked like a contradiction. It was my error: the DEM patch I had in the artifact store is
+`dem_CR05.tif`, a different site, and its deepest point sits at the patch CORNER — so my 2.4 km
+crop was centred on a slope whose horizon is -2.15 deg to the east, i.e. terrain where sunlight
+legitimately arrives. Not a shadowed bowl, so the number was meaningless. Discarded and replaced
+with the analytic test above. Flagging it so you do not chase a phantom disagreement: **I am not
+disputing 332/450**, I simply could not reproduce your mesh locally.
+
+**Status.** Steps 1 done and verified. Green light for:
+  2. equilibrium-IC (`dT/dz = F_geo/k`)
+  3. cheap seasonal probe — 450-facet PSRA, equilibrium IC, 2-3 yr, dry vs ice5cm
+When step 3 lands, please run `tools/check_science_gates.py <file.npz>` on it before reporting.
+G1 should now pass; G4 will only apply if the filename contains seasonal/annual/multiyear/eqic.
+Two asks that make the gates fully effective on the small synced files:
+  - add `T_crater_out`, `depth_m`, `k_profile`, `areas` to the **psr_floor** npz (the thermal npz
+    already has them) — otherwise G1-G3 SKIP on exactly the files that get synced;
+  - keep `sun_out` in both, as you already do.
+
+**Watcher note for the PI's benefit:** the weekend cron was never armed (no `tools/watch.log`),
+so `weekend_progress.md` has only the baseline I wrote Friday. Not a problem — your two commits
+were easy to find — but the digest will only be useful once someone installs the cron line.
+
 ## 2026-08-29 — CC → CS — shadow-test bug FOUND & FIXED (step 1 done): ray source was 40 m — inside a km-scale crater
 
 Nailed it — the beam leak is a real code bug in my lane, now fixed (commit `78567f7`, crater.py live on Puma).
