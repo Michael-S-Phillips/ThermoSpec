@@ -77,10 +77,28 @@ class Simulator:
 		self._init_state()
 
 
+	def _geothermal_equilibrium_offset(self):
+		"""Per-node temperature offset (K) of the steady conductive profile that carries the basal
+		geothermal flux upward: dT/dz = geothermal_flux / k(z), i.e. offset(z) = F_geo * int_0^z dz'/k(z').
+		Added to a surface anchor temperature this gives a column already draining F_geo (monotone-rising
+		with depth; conductive cap flux == F_geo), so a cold-trap floor need not spin the whole geothermal
+		gradient up from a uniform IC. Returns zeros unless bottom_bc=='geothermal' (nothing else pins a
+		basal flux). Uses the same tau->metre mapping as the driver: depth_m=x/Et, k=cond/Et^2."""
+		if self.cfg.bottom_bc != "geothermal":
+			return np.zeros(self.grid.x_num)
+		Et = np.asarray(self.cfg.Et, dtype=float)
+		depth_m = self.grid.x / Et                    # node depths (m), monotone increasing
+		k = self.grid.cond / (Et**2)                  # physical conductivity per node (W/m/K)
+		inv_k = 1.0 / k
+		seg = 0.5 * (inv_k[:-1] + inv_k[1:]) * np.diff(depth_m)   # trapezoid rule on 1/k over depth
+		return self.cfg.geothermal_flux * np.concatenate([[0.0], np.cumsum(seg)])
+
 	def _init_state(self):
 		"""Initialize state variables and output arrays."""
 		# Initial temperature field (K)
 		self.T = np.zeros(self.grid.x_num) + self.cfg.T_bottom
+		if self.cfg.equilibrium_ic:
+			self.T = self.T + self._geothermal_equilibrium_offset()
 		# Initialize surface temp for non-RTE models
 		self.T_surf = self.cfg.T_bottom
 		
@@ -111,6 +129,9 @@ class Simulator:
 			n_facets = len(self.crater_mesh.normals)
 			n_out = len(self.t_out)
 			self.T_crater = np.zeros((self.grid.x_num,n_facets)) + self.cfg.T_bottom  # [depth, facets]
+			if self.cfg.equilibrium_ic:
+				# every facet column starts on the conductive geothermal equilibrium anchored at T_bottom
+				self.T_crater = self.T_crater + self._geothermal_equilibrium_offset()[:, None]
 			self.T_surf_crater = np.zeros(n_facets) + self.cfg.T_bottom
 			self.flux_therm_crater = np.zeros(n_facets)
 			self.illuminated = np.zeros(n_facets)

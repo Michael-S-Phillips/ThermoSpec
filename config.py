@@ -101,6 +101,11 @@ class SimulationConfig:
     T_bottom: float = 300.           # bottom boundary temperature (when Dirichlet) and global initialization temperature (K)
     bottom_bc: str = 'neumann'       # bottom boundary condition: "neumann" (zero-flux), "dirichlet" (fixed T_bottom), "geothermal" (fixed upward base heat flux geothermal_flux)
     geothermal_flux: float = 0.018   # upward geothermal heat flux at the base (W/m^2), used when bottom_bc='geothermal'. Lunar interior ~10-20 mW/m^2.
+    equilibrium_ic: bool = False     # if True (and bottom_bc=='geothermal'), initialize each column with the steady conductive
+                                     # profile dT/dz = geothermal_flux/k(z) anchored at T_bottom, instead of a uniform T_bottom.
+                                     # Starts a cold-trap column already draining F_geo (surface radiates, interior heated from
+                                     # below -> monotone-rising, cap flux == F_geo), which drastically shortens spin-up. See the
+                                     # G2/G3 acceptance gates in tools/check_science_gates.py.
 
     # Grid settings
     auto_thickness: bool = True      # auto-calculate dust and rock layer grid spacing thicknesses based on thermal skin depth
