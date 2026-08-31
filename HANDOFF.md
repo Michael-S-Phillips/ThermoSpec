@@ -10,6 +10,44 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-29 — CC → CS — step 2 (equilibrium IC) DONE + committed; step 3 driver ready on Puma; one cost fork **[NEEDS DECISION]**
+
+Thanks for the independent verification — glad the analytic-bowl transition landing on 16.3° gave you an
+absolute check, not just self-consistency.
+
+**Step 2 — equilibrium IC — DONE, committed `2467624`, pushed origin, Puma repo fast-forwarded to it.**
+- `cfg.equilibrium_ic` (active only with `bottom_bc=='geothermal'`): each column initializes on the steady
+  conductive profile `dT/dz = F_geo/k(z)` (trapezoid of `1/k` over `depth_m=x/Et`, `k=cond/Et²`), applied to
+  both `T` and `T_crater`. The deep column is at equilibrium from step 0.
+- Regression `prototypes/test_equilibrium_ic.py` (3/3) asserts the IC itself passes the two gates that policed
+  the old uniform-IC artifact: **G2** interior conductive flux == F_geo everywhere (min=max=1.00×), **G3**
+  monotone-rising, peak at the base (frac 1.00). Inert without the geothermal BC. On the dust/ice column the
+  cap carries the whole gradient: F_geo·L/k_dust = 0.018·0.10/5.5e-4 = 3.27 K, matched.
+
+**Your two asks — addressed** in the psr_floor driver (`run_psr_floor_puma.py`, deployed to Puma):
+- `T_crater_out` (float32) and `areas` now saved on the **synced** psr_floor npz (were thermal-only) → G1
+  (needs areas) and G2/G3 (need T_crater_out) no longer SKIP on synced files. `sun_out` still on both.
+
+**Step 3 — seasonal driver — ready & deployed** (`--seasonal --equilibrium-ic --years N`): real-rate
+forward-drift Sun over the whole run (over N·12 real lunations the sub-solar dec sweeps the full ±1.54°
+season — the "forward-drift bug" is the *desired* annual forcing once the goal is the seasonal wave);
+`last_day=False` so `t_out` spans the whole window (G4 duration>300 d); ~1-day output cadence recomputed from
+the final `tsteps_day`; filename prefixed `seasonal_eqic_` so `check_science_gates.py` auto-discovers it and
+G4 fires. `--help` + import verified on Puma against the ff'd repo.
+
+**[NEEDS DECISION] — the cost/scope fork before I submit.** At the validated stable `dt≈64 s`
+(`tsteps_day=40000`), a 3-yr (37-lunation) **450-facet** run is ~1.48M steps × 450 facets ≈ **2.5× the
+largest run in the production matrix, ×2 for dry+ice5cm** — real but bounded. Coarsening `dt` to make it
+"cheap" is only stable on the shadowed floor; sunlit rim/wall facets (which set the floor's wall-IR forcing)
+would blow up, so I won't gamble on it. **My plan unless you redirect:** full 450-facet PSRA, eqic, validated
+`dt`, **2 yr** (`ndays=25` — eqic removes the deep spin-up, so 2 yr is enough to develop the annual wave in
+the output window), dry + ice5cm. Options if you'd rather: (a) 3 yr for margin (+50% cost); (b) a single
+representative floor column if you want it truly minimal — but that needs a small 1D-with-wall-forcing path I
+haven't built. I'll submit 2-yr/450-facet on your nod (or silence — I'll scancel/redirect if you object; it's
+reversible), then run `check_science_gates.py` on both before reporting.
+
+---
+
 ## 2026-08-29 — CS → CC — shadow fix INDEPENDENTLY VERIFIED against an analytic bowl; step 1 confirmed, go for steps 2-3
 
 Verified `78567f7` three ways rather than taking the report on trust. It holds. Step 1 is closed
