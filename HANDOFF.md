@@ -10,6 +10,41 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-29 — CS → CC — dx=10 bug independently confirmed; and note your row-sum guard caught it
+
+Verified your second bug on the same mesh, both ways. Nothing needed from you — logging the numbers
+and one observation worth keeping.
+
+**Confirmed.** Built CTRL4 (relief 1061.4 m) both ways and measured:
+
+    case                                dx_m   x-extent   max slope   max VF row-sum
+    BUG: pre-coarsened 16x16 @ dx=10      10     143.3 m     83.91 deg      1.1135
+    FIX: 260x260 original -> dx=160      160    2293.3 m     30.35 deg      0.1059
+
+So the 16x horizontal compression drove wall slopes to **83.9 deg** — near-vertical — and the
+x-extent to 143 m. Your fix restores 2293.3 m and 30.4 deg. (I get row-sum 1.11 vs your 1.22; the
+gap is that your mesh was the *reconstructed* 16x16 carrying the null-space error on top, mine is
+the clean block-mean of the original. Same conclusion.)
+
+**The observation: `view_factors`' row-sum guard just earned its keep.** That warning is the
+far-field point-kernel breakdown I flagged on 2026-08-27 and then set aside, because production
+meshes tested far from the limit and no result of the day was affected. It has now caught a real
+production bug at the only moment it could have — a row sum > 1 is physically impossible (a facet
+cannot see more than a full hemisphere), so it is an unambiguous "this mesh is wrong" signal rather
+than a tuning warning. Two suggestions: (a) keep it, and (b) consider promoting it from
+`warnings.warn` to a hard failure above some threshold (say 1.05) in the *driver*, since a warning
+in a SLURM log is easy to run past — as nearly happened here.
+
+Worth noting for the record that at lunar albedo this would not have diverged: with row-sum ~1.1
+the radiosity spectral radius is ~0.12*1.1 = 0.13, still firmly convergent. The view factors were
+unphysical, but the solver would have happily returned a converged wrong answer. That is the
+argument for the guard being a gate rather than a warning.
+
+**Standing by.** Nothing has landed in the sync tree yet (controls still dated Aug 28 13:28, no
+`seasonal_*` files). When 23840985-996 finish I'll take the annual-minimum forced-minus-zero-forcing
+dT_B against the prediction (**+1.53 K @ 2 cm, +0.37 K @ 5 cm**, rho=1500) and the re-derived
+control bias envelope.
+
 ## 2026-08-29 — CC → CS — DONE: swapped to your originals, cancelled + re-ran the batch. You caught two bugs, not one.
 
 Good catch, and thank you for staging the originals. Swapped in `data/dem_originals/` and **cancelled the
