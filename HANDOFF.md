@@ -10,6 +10,97 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-29 — CS → CC — PREDICTION for the seasonal probe, from an independent 1D model: report the annual MINIMUM, and add a zero-forcing pair [ACTION NEEDED]
+
+Built while you submit, so the probe is a **test against a number** rather than an open-ended
+measurement — this project has had four bugs whose output looked plausible, and I did not want a
+fifth to pass as a discovery. Independent 1D layered model, same physics as your cold-trap
+configuration: `scripts/seasonal_1d.py`, figure `figures/seasonal_prediction.png`, numbers
+`diviner/seasonal_prediction.json`.
+
+**Validated first, three ways.** (a) *Steady-state theorem*: with zero seasonal forcing the
+ice-dry surface difference must be exactly zero, because the surface balance passes only F_geo
+and is k-independent. Measured -0.155 K at 3 yr decaying to **-0.005 K at 100 yr**, converging on
+the analytic `((Q0+F_geo)/sigma)^0.25 = 41.3641 K`. So the theorem holds and the residual is
+spin-up, not a defect. (b) Conducted flux: dry 18.03 mW/m2 at node 1, 18.01 at base; ice
+17.76/18.00; BC 18.0. (c) Convergence: `dT_min(2cm)` = 1.5116/1.5651/1.5670/1.5680 K at
+12/24/48/96 steps per lunation. Grid uncertainty **+-0.09 K**.
+
+## 1. [ACTION NEEDED] Report the annual MINIMUM, not the annual mean
+
+This is the one that would have cost us the experiment. At mid forcing:
+
+    ice depth   annual-MEAN dT_B    annual-MINIMUM dT_B
+      2 cm          +0.05 K              +1.57 K
+      5 cm          -0.01 K              +0.38 K
+      9 cm          -0.04 K              -0.12 K
+
+**The annual-mean signal is at the artifact level. The annual-minimum signal is 30x larger.**
+Mechanism: the high-k ice layer conducts heat up from the deep reservoir during the cold season,
+so the ice column does not cool as far — it is a thermal-inertia phase/amplitude effect, visible
+at the cold extreme and almost absent from the mean. **If the driver reports the mean, the probe
+returns a false negative.** This also happens to be the right observable for us: the Diviner
+winter cumulative product we validate against is effectively the annual minimum.
+
+## 2. Falsifiable prediction
+
+Mid-forcing case (dry-column annual amplitude 3.1 K), annual-minimum `dT_B`:
+
+    2 cm  +1.57 K     9.6x the 2-yr artifact   -> retrievable
+    5 cm  +0.38 K     2.4x                     -> marginal
+    9 cm  -0.12 K     0.7x, SIGN FLIPPED       -> no
+   15 cm  -0.10 K     0.6x                     -> no
+   30 cm  -0.02 K     0.1x                     -> no
+
+The forcing amplitude is the **one genuine unknown** — the only run that ever sampled the sunlit
+season was the beam-leaking summer epoch, so nobody has measured the annual wall-IR amplitude at a
+PSR floor. I therefore ran three cases spanning dry-column annual amplitudes of **1.5 / 3.1 /
+4.7 K**; all three are in the JSON. Your probe measures this for the first time — read the
+matching row and compare.
+
+**Depths >= 9 cm are not retrievable even in principle** under seasonal forcing: signal below
+artifact, and sign-flipped. That is a real limit, not a modelling shortfall, and it means the
+2-28 cm depth series we retracted was never recoverable this way.
+
+## 3. Your equilibrium IC works — quantified
+
+Zero-forcing residual (pure artifact, no ice physics possible):
+
+    run length    2 cm      5 cm     15 cm     30 cm
+       2 yr     -0.163    -0.100    -0.035    -0.012
+       4 yr     -0.144    -0.099    -0.044    -0.020
+       8 yr     -0.104    -0.083    -0.046    -0.025
+      32 yr     -0.015    -0.025    -0.030    -0.024
+
+Against the old uniform-110 K IC's reported **+19.29 K** at 2 cm: a factor **~120** reduction.
+Step 2 did what it needed to.
+
+Note the artifact is now **negative** — opposite sign to the old one — so it does not mimic an ice
+signal, it *masks* one. And note the decay is slow: spin-up time constants are **4.2 yr (2 cm),
+10.5 yr (5 cm), 30.9 yr (15 cm), 59.8 yr (30 cm)**, set by cap thermal resistance `d/k_dust` times
+the deep reservoir heat capacity. The dust cap throttles drainage, so deeper ice equilibrates
+*slower* despite the higher k.
+
+## 4. [ACTION NEEDED] Add a zero-forcing companion pair
+
+Your 2-yr length is fine for 2 cm (9.6x margin) and marginal for 5 cm (2.4x). Rather than argue
+about whether 2 yr is enough, **measure it**: run `dry` and `ice5cm` a second time with the
+seasonal forcing disabled, same length, same eqic. The difference is then a pure artifact
+measurement you subtract from the forced pair. Two extra 450-facet runs, and it converts the
+dominant uncertainty from an assumption into a number. If cost allows, 4 yr roughly halves the
+2 cm artifact.
+
+## 5. Caveats on my side
+
+- I **assumed** ice-layer `rho=920 kg/m3` and `cp=800 J/kg/K`; only `k=2.0` was confirmed from
+  your backfilled grids. `rho*cp` sets the reservoir capacity and hence the spin-up constants —
+  it does not change the sign or the ~5 cm depth cutoff. **Please tell me the actual values** and
+  I will re-run; if they differ much the artifact-floor table shifts.
+- 1D, so it captures the layered response but not lateral wall-IR gradients across the floor.
+  Your 3D run is the authority; this is the prior it should be tested against.
+- Forcing is a pure sinusoid at the annual period plus an optional lunation term. Real wall IR
+  will have harmonics.
+
 ## 2026-08-29 — CS → CC — GO on the 2-yr seasonal probe, but the 4 CONTROLS must be re-run: they predate the shadow fix [NEEDS DECISION]
 
 PI asked for a status review with a hard look at the radiosity solver and the non-PSR controls.
