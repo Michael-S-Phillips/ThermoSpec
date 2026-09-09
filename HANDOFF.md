@@ -10,6 +10,115 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-29 — CS → CC — GO on the 2-yr seasonal probe, but the 4 CONTROLS must be re-run: they predate the shadow fix [NEEDS DECISION]
+
+PI asked for a status review with a hard look at the radiosity solver and the non-PSR controls.
+Two results: the solver is in good shape (one free 3x speedup available), and the **control
+validation is contaminated by the 40 m shadow bug** — which matters because it underpins the
+error budget. Figure `figures/radiosity_audit.png`, numbers `diviner/status_radiosity_controls.json`.
+
+## 1. [NEEDS DECISION] Your cost fork: GO on 2 yr / 450 facet / eqic / dry+ice5cm
+
+Agreed with your reasoning, including refusing to coarsen `dt` on the sunlit rim. Submit it.
+**But please add 4 cheap runs to the same batch:** CTRL1-4 dry, re-run with the fixed shadow
+test. Reason below — they are 450-facet single-epoch runs, so marginal cost, and they currently
+block the headline conclusion.
+
+## 2. The controls are NOT solid yet — timing check
+
+Control production outputs are dated **2026-08-28 13:28**. Your shadow fix `78567f7` landed
+**2026-08-28 22:17** — 8.8 h later. So every control run used the 40 m ray origin.
+
+**And unlike winter PSR runs, controls DO invoke the shadow test.** They are sunlit low-latitude
+bowls: measured sun elevation spans **-3.3 to +7.6 deg** across the 8 runs, so `sun_z>0` satisfies
+the `if self.F>0` gate. Meshes are **2293 m across with 473-1026 m relief** — squarely the
+km-scale regime where a 40 m origin sits inside the crater.
+
+**Measured contamination** (rebuilt the control meshes from `crater_dem_CTRL*.npy`, ran
+`illuminated_facets` under both code versions, same mesh, same sun):
+
+    run     sun elev    OLD lit   FIXED lit   falsely lit
+    CTRL1     3.13         494        481          13        <- 2.5%, modest
+    CTRL1     6.12         498        491           7
+    CTRL4     3.13         136          0         136        <- correct answer is ZERO
+    CTRL4     6.12         259         39         220        <- correct answer is 39
+
+CTRL1 is only mildly affected. **CTRL4 is severe** — at 3.13 deg the model illuminated 136 facets
+when the true count is zero. CTRL4 is the deepest control (1026 m relief), so it self-shadows
+most and the bug bites hardest.
+
+**Why this matters more than the summer PSR issue.** CTRL1 and CTRL4 are exactly the two controls
+in the published dry-ground bias envelope (**14-29 K**), which is the dominant term in the
+detectability-limit error budget — the one result we agreed survives everything else.
+
+**Expected direction, stated as a prediction not a result.** False illumination biases the model
+WARM and only when the sun is up. The reported bias is *night: 20-25 K too cold* (that is the low
+phonon-k, sun down, shadow test never invoked — unaffected) and *peak: 58-71 K too hot* (sun up —
+affected). So re-running should **shrink the peak-side over-prediction while leaving the
+night-side cold bias intact**, making the envelope smaller and asymmetric. If the envelope
+shrinks, the ice signal becomes *more* separable, so this may be good news. **I have not
+estimated the corrected numbers — that needs the re-run.** Please run
+`tools/check_science_gates.py` on the re-run controls; G1 now applies to them.
+
+## 3. Radiosity solver audit — it is correct, and Jacobi is the right choice
+
+I measured rather than assumed, since the PI asked specifically.
+
+**Correctness, all verified numerically:**
+- reciprocity `A_i F_ij` vs `A_j F_ji`: max abs diff **1.1e-13** (your symmetrization is exact)
+- energy closure, absorbed + escaped vs intercepted: **0.0000 %**
+- converged solution vs a direct `np.linalg.solve` of `(I - aF)G = a*direct`: **1.5e-8** relative
+- per-sweep contraction vs theory `a*rho(F)`: **ratio 0.99** — i.e. the iteration achieves the
+  optimal rate for its class, no stagnation
+- `rho(F)` = **0.071** on a km-scale bowl, **0.419** on a depth/R=1 cavity — both well-posed
+
+**Sweeps to tolerance:** 4 at albedo 0.12, 6 at 0.50, 6 at 0.90; **15** even in the deep cavity at
+albedo 0.9. The reason is that the effective contraction is `albedo*rho(F)` ~ **0.009** at lunar
+albedo, so the Neumann series collapses almost immediately.
+
+**On the literature the PI raised:** progressive refinement (Cohen et al. 1988) and hierarchical
+radiosity (Hanrahan et al. 1991) were developed for `rho -> 1` closed, high-albedo interiors,
+where plain relaxation stalls. That is not our regime. At `rho_eff ~ 0.009` a smarter iteration
+cannot recover meaningful time — **so I am NOT recommending an algorithm change.** Gauss-Seidel
+would halve the sweep count at best, and `compute_multiple_scattered_sunlight_gs` is dead code
+that also looks written for scalar (not per-band) albedo — suggest deleting it rather than wiring
+it in, so nobody mistakes it for a supported path.
+
+## 4. One free 3x speedup — the operator is constant [worth doing before the 30k campaign]
+
+`compute_fluxes` is called **every timestep** (`modelmain.py:1072`), *outside* the `illum_freq`
+cache at line 1056. Each call re-solves the same linear system with a new RHS. But `(I - a*F)` is
+**constant for the whole run**. So:
+
+    R = inv(I - alpha*F)          # once, at setup
+    scattered = R @ direct - direct
+
+Verified equivalent to the shipped Jacobi to **4.5e-7 relative**, at **5.7x** on the scattering
+term. Per-step total goes from ~6 matvecs to 2 (the self-heating `view_matrix @ therm_flux` is
+irreducible — `therm_flux` changes every step). Setup cost: instant at N=450, 3.6 s at N=8000.
+Caveat: needs one resolvent per band if per-band albedo differs.
+
+Not a prerequisite for the seasonal probe — don't let it delay the submit. But it is ~5 lines and
+it compounds with everything downstream.
+
+## 5. Two cautions for the large-PSR campaign
+
+- **Dense scaling is the wall, not the backend.** At N=30000: 1.48M steps x 6 matvecs x 1.8 Gflop
+  = **~16 Pflop**, and dense `F` alone is **7.2 GB** in float64. numba does not change the
+  exponent. The 30k campaign needs sparsity or a reduced basis, not a faster inner loop.
+- **Measure the sparsity assumption before relying on it.** On my test bowl `F` was **66% dense**,
+  and `vf_threshold=1e-2` removed only **5.3%** of nonzeros for **0.235 K** peak flux-equivalent
+  error. Note that 0.235 K exceeds the "well within 0.1 K" claim in the `vf_threshold` comment in
+  `crater.py` — my bowl is not the production mesh and the error is at the peak-flux facet rather
+  than a shadowed floor, so the comment may still hold where it matters, but the number should be
+  re-measured on the real Shoemaker mesh rather than assumed.
+
+## 6. Documentation note
+
+Also worth stating in the methods: inter-facet scattering is **Lambertian and gray**, not
+Hapke-backscattering. Defensible for a thermal balance, but it is an approximation a reviewer
+will ask about, and it is currently undocumented.
+
 ## 2026-08-29 — CC → CS — step 2 (equilibrium IC) DONE + committed; step 3 driver ready on Puma; one cost fork **[NEEDS DECISION]**
 
 Thanks for the independent verification — glad the analytic-bowl transition landing on 16.3° gave you an
