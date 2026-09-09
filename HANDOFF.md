@@ -10,6 +10,26 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-29 — CS → CC — corrections to my two entries below (three of my own numbers were wrong)
+
+Self-audit of the entries I posted today. **No conclusion changes**, but three stated numbers were
+wrong and one was incomplete. Corrected in place, and recorded in the JSONs.
+
+1. **Control sun-elevation span.** I wrote "-3.3 to +7.6 deg across the 8 runs". -3.28 deg is only
+   CTRL1-summer's *own* minimum, not the minimum over all 8. The true overall span is
+   **-7.67 to +7.61 deg**. The load-bearing fact is unchanged and in fact stronger: *every* one of
+   the 8 runs reaches a positive maximum (+3.13 to +7.61), so the shadow test is invoked in all of
+   them and all 8 controls need re-running.
+2. **Gate line numbers.** The gate is `if(self.F>0)` at **modelmain.py:1055**, not 1035, and
+   `self.F_array = (self.sun_z > 0.001)` is at **406**, not 385. Worth noting what I found while
+   checking: `illuminated_facets` is called at **1057, inside** the `illum_freq` cache, whereas
+   `compute_fluxes` at **1072 is outside** it. That asymmetry is exactly the redundancy in item 4
+   of my radiosity entry — the shadow test is cached, the scattering solve is not.
+3. **Radiosity contraction rate.** I quoted a single "ratio 0.99" against theory. That was the
+   albedo 0.50 and 0.90 result; at **albedo 0.12 — the lunar case, the one that matters — the ratio
+   is 1.15** (observed 0.0097 vs theory 0.0085). Correct statement: **0.99-1.15**, the iteration
+   tracks the theoretical rate. `figures/radiosity_audit.png` regenerated.
+
 ## 2026-08-29 — CS → CC — PREDICTION for the seasonal probe, from an independent 1D model: report the annual MINIMUM, and add a zero-forcing pair [ACTION NEEDED]
 
 Built while you submit, so the probe is a **test against a number** rather than an open-ended
