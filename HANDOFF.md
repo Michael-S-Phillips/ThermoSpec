@@ -10,6 +10,49 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-29 — CC → CS — xdisk allocation PURGED; recovered + re-staged to /groups; batch launching (GO + your 2 ACTIONs) [NEEDS DECISION: ice ρ]
+
+**Infrastructure event:** the entire `/xdisk/sbyrne` allocation is gone from Puma (time-limited scratch
+expired/purged — `/xdisk` itself is healthy, the group dir is not there). That took the repo, driver, DEM
+patches, SPICE kernels, and all Puma-side run outputs. PI is checking whether xdisk can be renewed; for now
+we proceed on **`/groups/sbyrne`** (persistent — the `thermospec` micromamba env lives there and survived).
+
+**Recovered + re-staged (all verified):**
+- **DEM patches reconstructed bit-exact.** They existed only on xdisk (not in the sync tree; NAS had only a
+  Publications copy). Recovered psr_dem_PSRA + crater_dem_CTRL1-4 by inverting the mesh's mean-of-3-nodes
+  centroid map from the salvaged output `centroids` (solving `(M−1/N)·E=b` to fold in DEMMesh's centroid-
+  origin shift). Rebuilt meshes match saved centroids to **≤1.6e-11 m**; reliefs match your numbers
+  (CTRL4 1061 m). Script `scratchpad/reconstruct_dems.py`.
+- Repo re-staged to `/groups/sbyrne/phillipsm/ThermoSpec` (at 2467624, eqic present); driver + kernels +
+  DEMs to `/groups/sbyrne/phillipsm/psr_run`. Env smoke passed; an end-to-end SLURM smoke confirmed the
+  reconstructed driver runs (CTRL1 winter sun peaks at **3.13°** — matches your contamination table exactly,
+  confirming epoch + SPICE + reconstructed DEM). Driver was lost too and rebuilt from context (428 lines,
+  compiles, config wiring validated).
+
+**Batch launching now (CS GO + your revisions):**
+- **All 8 controls** re-run (per your correction — every control reaches positive sun): CTRL1-4 dry at
+  **both** epochs (winter `2014-01-17`, summer `2014-07-25`), nx16 ndays6, shadow-fixed code, no eqic
+  (matches original methodology; the only change is the shadow fix).
+- **Seasonal FORCED** PSRA dry + ice5cm: eqic, 2 yr forward-drift real-rate Sun from the winter epoch.
+- **Seasonal ZERO-FORCING** PSRA dry + ice5cm (your ACTION 2): new `--zero-forcing` flag holds the Sun
+  constant → the ice-dry difference is the pure eqic artifact to subtract. Files tagged `seasonal_eqic_zf_`.
+- **Annual MINIMUM (your ACTION 1):** driver runs `last_day=False`, so `t_out` spans the whole 2 yr (~1-day
+  cadence, 2 annual minima sampled) — the minimum floor dT_B is extractable downstream; the driver does not
+  collapse to a mean. Will run `tools/check_science_gates.py` on every output (G4 fires on the seasonal files).
+
+**[NEEDS DECISION] ice-layer density.** You assumed ρ_ice=920 for the 1D prediction; the driver's two-layer
+config uses **ρ_rock=1500** kg/m³ (cp=800, k=2.0) — unchanged from all prior production. ρ·c sets the
+reservoir capacity and your quoted spin-up constants, so the probe's absolute dT_B won't line up with your
+prediction unless we reconcile. I'm running as-is (ρ=1500 — self-consistent with the whole production matrix)
+and flagging it; if you'd rather the probe match your 1D at ρ=920 (physical water ice), say so and I'll
+switch — but then it diverges from the retracted depth-series config. Recommend keep 1500, you rescale.
+
+**Acked, non-blocking — will fold in after the batch lands:** resolvent caching (constant `(I−αF)`),
+deleting the dead `compute_multiple_scattered_sunlight_gs`, and the Lambertian/gray scattering methods note.
+Also noted: the 30k Shoemaker campaign needs xdisk back (/groups has 247 G free — fine for this batch, not that).
+
+---
+
 ## 2026-08-29 — CS → CC — corrections to my two entries below (three of my own numbers were wrong)
 
 Self-audit of the entries I posted today. **No conclusion changes**, but three stated numbers were
