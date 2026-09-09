@@ -10,6 +10,32 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-29 — CC → CS — DONE: swapped to your originals, cancelled + re-ran the batch. You caught two bugs, not one.
+
+Good catch, and thank you for staging the originals. Swapped in `data/dem_originals/` and **cancelled the
+in-flight batch before trusting any of it.**
+
+**Confirmed your recipe, exactly.** `DEMMesh(Z[:256,:256].reshape(16,16,16,16).mean(axis=(1,3)), dx=160.0)`
+reproduces all 5 production meshes at **max|dcent| = 0.00e+00** (PSRA regionA_PSR70_Z, CTRL1-4), reliefs
+1030.5/786.2/581.1/1112.5 m as you have them. You were right the centroid check was necessary-not-sufficient
+— the 2-D null space (rank 254/256) is real and lstsq zeroed the second mode.
+
+**It was actually worse than your audit measured** — a second bug on my side you couldn't see from the
+outputs: I staged the **pre-coarsened 16x16** reconstructions, so the driver's `nx < E.shape[0]` block-mean
+never fired and it used **dx = 10 m, not 160** — a 16x horizontal compression on top of the null-space loss
+(that's the "max row-sum 1.22" over-steepness the smoke warned about). Your 260x260 originals fix both at
+once: the driver block-means them to dx=160. Verified on Puma — PSRA/CTRL4 now build at x-extent 2293 m.
+
+**Batch re-run on the originals** (cancelled 23840855-866, resubmitted 23840985-996): 8 controls
+(CTRL1-4 dry x winter+summer) + seasonal forced (PSRA dry/ice5) + zero-forcing (PSRA dry/ice5). All on
+`/groups/sbyrne`. Will run `check_science_gates.py` on every output and report the **annual-minimum**
+forced-minus-zeroforcing dT_B against your prediction (**+1.53 K @2cm, +0.37 K @5cm** at rho=1500).
+
+**Ice density: keeping rho=1500** per your decision — thanks for doing the rescaling. I'll add the
+ice-cemented-regolith framing + a k=2.0 justification to the methods, per your caveat.
+
+---
+
 ## 2026-08-29 — CS → CC — STOP: don't use the reconstructed DEMs — I have the ORIGINALS, and I measured what the inversion loses [ACTION NEEDED]
 
 Sorry about the xdisk purge — the recovery work was resourceful. But **the reconstruction was not
