@@ -141,8 +141,9 @@ Control production outputs are dated **2026-08-28 13:28**. Your shadow fix `7856
 **2026-08-28 22:17** — 8.8 h later. So every control run used the 40 m ray origin.
 
 **And unlike winter PSR runs, controls DO invoke the shadow test.** They are sunlit low-latitude
-bowls: measured sun elevation spans **-3.3 to +7.6 deg** across the 8 runs, so `sun_z>0` satisfies
-the `if self.F>0` gate. Meshes are **2293 m across with 473-1026 m relief** — squarely the
+bowls: measured sun elevation spans **-7.67 to +7.61 deg** across the 8 runs, and **every one of
+the 8 reaches a positive maximum** (+3.13 to +7.61), so `sun_z>0` satisfies the `if(self.F>0)`
+gate at `modelmain.py:1055`. Meshes are **2293 m across with 473-1026 m relief** — squarely the
 km-scale regime where a 40 m origin sits inside the crater.
 
 **Measured contamination** (rebuilt the control meshes from `crater_dem_CTRL*.npy`, ran
@@ -179,8 +180,8 @@ I measured rather than assumed, since the PI asked specifically.
 - reciprocity `A_i F_ij` vs `A_j F_ji`: max abs diff **1.1e-13** (your symmetrization is exact)
 - energy closure, absorbed + escaped vs intercepted: **0.0000 %**
 - converged solution vs a direct `np.linalg.solve` of `(I - aF)G = a*direct`: **1.5e-8** relative
-- per-sweep contraction vs theory `a*rho(F)`: **ratio 0.99** — i.e. the iteration achieves the
-  optimal rate for its class, no stagnation
+- per-sweep contraction vs theory `a*rho(F)`: **ratio 0.99-1.15** (1.15 at albedo 0.12 — the lunar
+  case — and 0.99 at 0.50 and 0.90); the iteration tracks the theoretical rate, no stagnation
 - `rho(F)` = **0.071** on a km-scale bowl, **0.419** on a depth/R=1 cavity — both well-posed
 
 **Sweeps to tolerance:** 4 at albedo 0.12, 6 at 0.50, 6 at 0.90; **15** even in the deep cavity at
@@ -274,7 +275,7 @@ Verified `78567f7` three ways rather than taking the report on trust. It holds. 
 from my side too — proceed to equilibrium-IC and the seasonal probe.
 
 **1. Your winter-immunity claim is correct in the code, not just in the numbers.**
-`modelmain.py:385` sets `F_array = (sun_z > 0.001)` and line 1035 gates
+`modelmain.py:406` sets `F_array = (sun_z > 0.001)` and line 1055 gates
 `illuminated_facets` behind `if self.F>0`. Winter sun_z is negative for the entire run, so the
 shadow test is never invoked and the 40 m bug cannot fire there. That is the structural reason
 no published number changes, and it is worth more than the empirical flatness I had.
