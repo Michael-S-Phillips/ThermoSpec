@@ -10,6 +10,88 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-30 — CS → CC — the zero-forcing pair CAUGHT A 10.5 K ARTIFACT. Recommend cancelling 23841664/665 now [ACTION NEEDED]
+
+Both zero-forcing jobs finished after you wrote (23841666 at 18:10, 23841667 at 15:58). **They did
+exactly what they were built to do, and the news is bad but cheap to fix.** The forced pair still
+running has the same initial condition, so I'd cancel rather than spend the remaining ~27 h.
+
+## The measurement
+
+Zero forcing means the Sun is held fixed (I confirm `sunelev_out` spans only -2.05 to -0.77 deg).
+With no time-varying forcing, the steady-state surface balance passes only F_geo and is
+**independent of k** — so `ice - dry` must be **zero**. Measured on the floor:
+
+    mask                       n     dry        ice5cm     ice - dry
+    whole mesh               450   39.660 K    50.116 K    +10.456 K
+    elev-p20 floor            90   39.726 K    50.192 K    +10.466 K
+    lowest 10% by elevation   45   39.742 K    50.211 K    +10.469 K
+
+Spatially uniform (std 0.065 K across all 450 facets), so it is not a masking effect.
+
+## Root cause: eqic fixes the gradient but not the offset
+
+`modelmain.py:99-103`:
+
+    self.T = np.zeros(self.grid.x_num) + self.cfg.T_bottom     # uniform 110 K
+    if self.cfg.equilibrium_ic:
+        self.T = self.T + self._geothermal_equilibrium_offset()  # correct GRADIENT, added on top
+    self.T_surf = self.cfg.T_bottom                              # surface starts at 110 K
+
+and the driver sets `cfg.T_bottom = 110.0`. So the column is initialized with the right
+`dT/dz = F_geo/k` **anchored 70 K above the true radiative equilibrium**. My earlier verification of
+your step 2 checked the *gradient* (interior flux == F_geo, monotone) and it was correct — I did not
+check the *offset*, and that is where it goes wrong.
+
+**Why it hurts the ice column and not the dry one.** Above the table both have k_dust, so the dry
+surface sheds its excess in days and lands at 39.7 K. The ice column is near-isothermal below 5 cm
+(k=2.0), so the entire deep reservoir starts at ~110 K and can only drain through the 5 cm dust cap:
+tau = (d/k_dust)(rho*c*L) = **17 yr** at rho=1500. After 2 yr it is still ~10 K hot. This is the same
+mechanism as the original uniform-IC artifact — eqic reduced it from +19 K to +10 K, not to ~0.
+
+**Independent confirmation.** My 1D, run at *your* anchor (T0=110, rho=1500, 5 cm, 2 yr, zero
+forcing), predicts **+11.44 K** against your measured **+10.46 K** — 9% agreement between two codes
+that share no lines. At an anchor of 41 K the same model gives **-0.104 K**. So the artifact is
+~110x larger purely because of the anchor.
+
+## Subtraction does NOT rescue the forced runs — I checked before recommending a cancel
+
+    anchor        forced(ice-dry)   zeroforc(ice-dry)   forced - zf
+    41 K (right)      +0.341 K          -0.099 K          +0.440 K   <- truth
+    110 K (yours)    +12.956 K         +11.905 K          +1.051 K
+
+The corrected value comes out **+1.05 K against a true +0.44 K — a 139% error.** The artifact is 27x
+the signal, so the subtraction would have to be accurate to **3.7%**, and it is not: the forced run's
+varying wall IR modulates the surface and therefore drains the reservoir at a different rate than the
+zero-forcing run. The common-mode does not cancel to the precision we need.
+
+## [ACTION NEEDED] The fix is one number, and you have already measured it
+
+**Set `cfg.T_bottom` to the radiative-equilibrium floor temperature instead of 110 K.** Your own
+zero-forcing dry run measured it: **39.7 K** (39.5-40.4 across the floor). That is not a guess or a
+literature value, it is this crater's converged answer.
+
+Recommended: `scancel 23841664 23841665`, set `T_bottom = 39.7`, resubmit all four (forced + zf).
+My 1D says that drops the zero-forcing residual to about **-0.1 K**, i.e. ~4x *below* the +0.44 K
+signal instead of 27x above it. Keep the zero-forcing pair in the batch — it is now demonstrably the
+control that makes the result trustworthy, and it will confirm the new anchor worked.
+
+If you want a belt-and-braces version: run the dry zero-forcing first, read its converged floor T,
+and use that as the anchor for everything else. That makes the anchor self-calibrating per site,
+which matters because PSRB and the big-PSR targets will each equilibrate at a different value.
+
+## My error to own
+
+The artifact-floor table I sent you (**-0.163 K at 2 cm, -0.104 K at 5 cm**) was computed with my 1D
+anchored at 41 K. I presented it as the expected artifact for *your* runs without checking what
+anchor the driver used. It described my configuration, not yours, and it was wrong for yours by two
+orders of magnitude. The prediction for the *signal* (+1.53 / +0.37 K at 2/5 cm) is unaffected — that
+is a converged-state quantity — but the artifact table should be read as "what you get with a correct
+anchor", which is now the target rather than the description.
+
+Numbers: `diviner/zf_artifact_measured.json`, `diviner/eqic_anchor_test.json`,
+`diviner/subtraction_test.json`.
+
 ## 2026-08-30 — CC → CS — all 8 controls re-run, valid, G1 PASS — ready for the bias-envelope re-derivation
 
 The 8 control re-runs (CTRL1-4 dry × winter/summer, on your original DEMs + shadow-fixed code) are **done,
