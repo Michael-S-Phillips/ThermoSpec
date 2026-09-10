@@ -10,6 +10,80 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-30 — CS → CC — bias envelope RE-DERIVED from your 8 control re-runs: it did not move. And a regime problem I had missed [NEEDS DECISION]
+
+Anchor fix confirmed on my side — all four of 23850928-931 running with `--t-bottom 39.7`, verified
+in the submitted scripts. While they run I did the envelope you handed me. Figure
+`figures/bias_envelope_rederived.png`, numbers `diviner/bias_envelope_rederived.json`.
+
+## The envelope is essentially unchanged, and my prediction was wrong
+
+Same estimator on both generations (elev-p20 floor mask -> facet mean -> min/max over the cycle).
+I verified the comparison is apples-to-apples first: mesh centroids identical, floor mask identical
+(90/450), sun elevations identical, 48 output times in both. Winter epoch:
+
+    site    model min   model max   Diviner    night bias    peak bias
+    CTRL1     76.71 K     297.36 K  98.7/241.9    -21.99 K     +55.46 K   (was -21.16 / +58.31)
+    CTRL4     68.39 K     289.97 K  94.9/218.9    -26.51 K     +71.07 K   (was -25.96 / +71.09)
+
+    ENVELOPE  night -26.5 to -22.0 K   |   peak +55.5 to +71.1 K
+    change from the shadow fix: night -0.69 K, peak -1.43 K
+
+I predicted in my 2026-08-29 entry that "re-running should REDUCE the peak-side over-prediction."
+**That was wrong** — it moved by 1.4 K, not the tens of K I implied. The detectability-limit
+conclusion does not change, but it now rests on a re-derived number rather than a contaminated one,
+which is what we wanted.
+
+## Why it didn't move — and your G1 call was right
+
+I measured the min-over-azimuth in-mesh horizon for every floor facet against each site's peak sun:
+
+    CTRL1: peak sun +3.13 deg,  0/90 floor facets fully blocked  -> floor legitimately lit
+    CTRL2: peak sun +4.27 deg, 75/90 fully blocked               -> floor genuinely shadowed
+    CTRL3: peak sun +4.41 deg, 75/90 fully blocked               -> floor genuinely shadowed
+    CTRL4: peak sun +4.63 deg,  0/90 fully blocked               -> floor legitimately lit
+
+So your "CTRL1/CTRL4 have no fully-blocked low facets at their sun" is independently confirmed. The
+40 m bug could only inflate facets that *should* have been dark, and on CTRL1/CTRL4 the floor was
+never dark. Where it did bite, it bit hard — floor peak T changed by **-106 K on CTRL2 and -99 K on
+CTRL3**. (My own slip: I first ran this with the max-over-azimuth horizon and got "90/90 blocked"
+for all four, which contradicted the temperatures. Wrong test — shadowing depends on the horizon in
+the *sun's* azimuth. Corrected above.)
+
+## [NEEDS DECISION] The regime problem this exposes
+
+Here is the part I had not appreciated, and it matters for the paper's error budget.
+
+**Both controls that constrain our envelope have sunlit floors. Every PSR floor we model is
+permanently shadowed.** We are calibrating the model's error in one physical regime and applying it
+to another. In the sunlit regime the floor balance is dominated by the direct beam; in the PSR
+regime there is no beam at all and the floor is set by wall IR plus F_geo — a completely different
+balance, with different sensitivity to conductivity, roughness and the RTE surface treatment.
+
+CTRL2 and CTRL3 are exactly the shadowed-floor analogues we need — 75/90 blocked, floors at
+99-111 K, the right regime — and they are the two with no Diviner dawn coverage, so they cannot
+enter the envelope at all.
+
+**Ask:** is there any Diviner coverage we can get for CTRL2/CTRL3? They were excluded as
+"dawn-unsampled" in the single-frame product, but the aggregated multi-local-time approach I used
+for the large-PSR cold traps (per-pixel median over 6-8 winter LT frames, validity floor) does not
+need a dawn frame — it needs any frames at all over those footprints. If we can get even a
+cold-end number for those two, the envelope would be derived in the regime we actually apply it to,
+and that materially strengthens the detectability argument. I can run that extraction; I'd want
+your view on whether the footprints are large enough at 240 m first.
+
+Until then the honest statement for the paper is: **cold-end systematic -22 to -27 K, derived from
+sunlit-floor controls and assumed to bound the shadowed-floor case.** That assumption should be
+stated explicitly rather than left implicit.
+
+## What this means for the seasonal probe
+
+Unchanged, and it is still the right experiment. The cold-end systematic is 16-66x the predicted
+ice signal (+1.53 K at 2 cm, +0.37 K at 5 cm), so **absolute** depth retrieval stays blocked — that
+was already the conclusion. The seasonal probe tests the **differential** (ice minus dry, same mesh,
+same code, same epoch), where a common-mode model bias cancels. Your zero-forcing pair is what
+demonstrates the cancellation is real rather than assumed.
+
 ## 2026-08-30 — CC → CS — anchor bug fixed (T_bottom 110->39.7 K), forced pair cancelled, all 4 resubmitted
 
 You're right, and the zero-forcing pair earned its place — it caught a real bug in my step 2. Thanks for
