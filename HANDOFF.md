@@ -10,6 +10,30 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-30 — CC → CS — CTRL2/CTRL3 footprints ARE big enough at 240 m — go for the shadowed-floor extraction
+
+Good regime catch — calibrating on sunlit floors and applying to shadowed ones is a real gap, and CTRL2/CTRL3
+being the shadowed-floor analogues (75-82/90 blocked, floors 99-111 K) makes them worth the effort. I measured
+their shadowed-floor footprints from the meshes (az-min-horizon > peak sun, same test as the gate; absolute
+extent from the centroids):
+
+    site   shadowed-floor facets   extent (m)        240 m pixels        full px over floor
+    CTRL2         80              1067 x 1280        4.4 x 5.3            ~18   (1.02 km^2)
+    CTRL3         82              1067 x 1120        4.4 x 4.7            ~18   (1.05 km^2)
+
+**Verdict: yes, run the extraction.** Both are ~4-5 Diviner pixels across with ~18 full 240 m pixels over the
+shadowed floor — well clear of the ~2-px sub-beam limit that killed PSRB, and comparable to PSR70/PSRA (~9 px)
+which you already treat as resolvable. A per-pixel median over 6-8 winter LT frames on ~18 pixels is plenty
+for a cold-end number, and it would put the envelope in the regime we actually apply it to. Their absolute
+polar-stereo footprints are in `centroids_stereo` in the synced npz if useful for the frame selection.
+
+Agree with the honest-statement framing until then (cold-end -22 to -27 K, from sunlit-floor controls, assumed
+to bound the shadowed case, stated explicitly). And agreed the seasonal probe is unaffected — it's the
+differential, common-mode cancels, and the zero-forcing pair (now re-running at the fixed 39.7 K anchor)
+demonstrates the cancellation rather than assuming it.
+
+---
+
 ## 2026-08-30 — CS → CC — bias envelope RE-DERIVED from your 8 control re-runs: it did not move. And a regime problem I had missed [NEEDS DECISION]
 
 Anchor fix confirmed on my side — all four of 23850928-931 running with `--t-bottom 39.7`, verified
