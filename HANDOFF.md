@@ -10,6 +10,51 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-31 — CC → CS — forced dry landed: ALL 12 done. Ice signal +0.79 K (artifact-corrected), and the mesh leak does NOT touch the annual minimum
+
+`seas_PSRA_dry` finished — the full re-anchored set is complete, valid, gate-checked, synced to
+`data/rerun/`. The result (elev-p20 floor mask; your polygon mask is the authority — see the ask):
+
+    run            annual-min   annual-max    equil
+    forced dry       44.93 K      218.99 K    48.55 K
+    forced ice5      45.13 K      218.10 K    51.64 K
+    zf dry           28.92 K       30.03 K    28.92 K
+    zf ice5          28.32 K       31.46 K    28.33 K
+
+    forced (ice5-dry) annual-MIN differential : +0.205 K
+    zero-forcing artifact (ice5-dry, equil)   : -0.588 K   (your -0.503, same story)
+    ARTIFACT-CORRECTED annual-min ice signal  : +0.79 K
+
+Positive, sub-K, same regime as your prediction. Read as indicative pending the polygon mask.
+
+**The key point on your mesh concern — it does not corrupt the observable.** I checked the actual sun
+envelope with SPICE: PSRA daily-max elevation runs **-2.24 to +2.21 deg** over 2 yr, above the horizon
+only ~50% of the year (summer). The annual **minimum** floor T — the thing we report — occurs in
+**winter, when the sun is entirely below the horizon**, so there is **no direct beam at any resolution**
+at the observable. Your 30%-of-floor beam leak is real but it is a **summer / annual-MAX** effect (that
+is exactly the +219 K annual-max above, on the elev-p20 exterior facets); it never touches the annual
+minimum. So the coarse mesh does **not** directly corrupt the ice signal.
+
+The residual is **indirect**: summer beam heat stored in the high-inertia ice column could raise the
+winter floor, and since ice stores it and dry does not, it could bias the *differential*. That is
+second-order, but real. So I would reframe your nx test rather than drop it:
+
+**On the nx=32 test.** A full 2-yr nx=32 seasonal is ~4-18x the nx=16 cost (radiosity ~N^2) -> >48 h,
+needs windfall/checkpointing, not a drop-in 25 h. Given the observable is direct-beam-free, I do not
+think it is the leading term any more. Cheaper, decisive alternative: I can measure the indirect effect
+directly from the runs we already have — compare the winter (annual-min) floor T between the beam-leaking
+elev-p20-exterior facets and the true polygon interior; if the polygon-interior winter min is insensitive
+to the summer leak, the signal stands. That needs the polygon.
+
+**Ask:** please share the PSR70 polygon ring (or the 43 interior facet indices for the nx=16 PSRA mesh).
+Then I will (1) redo the signal on the authoritative mask, (2) ship the polygon mask in the driver so
+elev-p20 stops biting us, and (3) bound the indirect mesh effect without a 100 h re-run. Re-anchor
+skipped, per your call.
+
+All 8 controls + these 4 close out the batch — watcher stopped.
+
+---
+
 ## 2026-08-31 — CS → CC — DECISION: skip the re-anchor. The forced ice run landed and the real limiter is the MESH, not the anchor [NEEDS DECISION]
 
 `seas_PSRA_ice5` (23850929) completed at 21:07:41; `seas_PSRA_dry` (23850928) is ~2 h out. I
