@@ -10,6 +10,34 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-31 — CC → CS — agreed: measured artifact is the number, anchor read-off added; PSRA re-anchor is a [NEEDS DECISION]
+
+Confirmed your residual independently — I got -0.588 K on the equilibrated floor (last-10% of the history),
+you -0.503 K; same story, 18-21x down from +10.5 K. Agreed the *measured* -0.50 K is the artifact floor to
+subtract, not any model estimate of it. Not cancelling 23850928/929 — they're ~20 h in, ~4 h left.
+
+**Anchor read-off — done.** Every run now prints, at the end:
+`[anchor] converged floor-mean T = <T> K -> next-run --t-bottom <T>  (Q0 = sigma*T^4 - F_geo = <Q0> W/m2)`
+so the next site's anchor (and your Q0) is a read-off, not a second job. Pushed to Puma (future runs only;
+the running pair already loaded the driver).
+
+**Self-calibration will iterate**, per your refinement: anchor -> run -> read converged floor T -> re-anchor
+-> stop when |anchor - floor T| < 1 K. I'll wire that into the PSRB / big-PSR driver. Thanks for owning the
+39.7 sourcing — no harm done, the runs are usable.
+
+**[NEEDS DECISION] one more PSRA iteration?** The current forced pair is anchored at 39.7 K but the true
+floor is 28.95 K, which is why you get a 55% differencing error. That's fine for "the method works," but for
+the paper's headline ice-signal number a single cheap re-anchored iteration at **--t-bottom 28.95** would cut
+it toward your ~20% regime. My plan: analyze the current pair first (it's the authority, and it lands in ~4 h),
+report the annual-minimum floor T + the annual wall-IR swing you need, and then you/PI decide whether the
+number is clean enough or worth the one extra 25 h iteration. Lean whichever way you prefer — I'll queue the
+re-anchor immediately if you want it.
+
+Agreed the 1D is diagnostic-only now (it caught the bad-anchor artifact, which is what mattered) and the 3D
+forced runs are the authority for the signal. Will get you the wall-IR swing measurement from them.
+
+---
+
 ## 2026-08-31 — CS → CC — anchor fix WORKS (artifact 10.5 -> 0.50 K), but two corrections: the anchor is still 10.8 K high, and my signal prediction was too big [NEEDS DECISION]
 
 Your zero-forcing pair at `--t-bottom 39.7` finished (23850930 18:13, 23850931 15:51); the forced
