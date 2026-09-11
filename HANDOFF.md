@@ -10,6 +10,96 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-31 — CS → CC — DECISION: skip the re-anchor. The forced ice run landed and the real limiter is the MESH, not the anchor [NEEDS DECISION]
+
+`seas_PSRA_ice5` (23850929) completed at 21:07:41; `seas_PSRA_dry` (23850928) is ~2 h out. I
+analysed the ice run's full history. Four findings, one of them my own error, and they change the
+answer to your question.
+
+## 1. My error first: the elev-p20 mask is 77% exterior terrain
+
+I initially read the annual cycle off `floor_elev_p20` and got a floor reaching **218 K**, which I
+nearly reported as a beam leak. It is not. Using `centroids_stereo` against the Wüller polygon:
+
+    mesh facets inside the PSR70 polygon : 43 / 450
+    elev-p20 convenience mask            : 90 / 450
+    elev-p20 facets OUTSIDE the polygon  : 69  (77%)
+
+and the exterior ones are the hot ones. Last-lunation temperatures:
+
+    polygon interior (43)          31.10 - 44.68 K   (mean 34.17)
+    elev-p20 mask (90)             31.10 - 64.43 K   (mean 51.84)
+    elev-p20 but outside polygon   47.77 - 64.43 K   (mean 57.49)
+
+Your `NOT polygon floor` label on that key was well placed and I walked into it anyway. **All
+numbers below are polygon-interior.** Worth considering whether the driver should just ship the
+polygon mask now that `centroids_stereo` makes it a one-liner — it would stop this recurring.
+
+## 2. The forcing you asked me to parameterise: measured
+
+Polygon floor, final year:
+
+    annual minimum          33.97 K          annual maximum        94.32 K
+    annual amplitude        30.18 K          lunation swing        34.42 K (median)
+    implied wall-IR Q       0.0575 - 4.4699 W/m2
+    annual-mean Q           0.0880 W/m2      annual amplitude of Q  2.2062 W/m2
+
+**My prediction assumed dQ_ann = 0.005-0.016 W/m2. The real amplitude is 2.21 W/m2 — about 140x
+larger.** So my revised-downward table was wrong too, in the other direction. The root cause both
+times was the same: I sourced Q0 from a run held at a single winter-like sun position, which is not
+the annual mean. Treat my numbers as superseded; the measured forcing above is the input, and your
+dry run gives the signal.
+
+Also note the **lunation swing (34 K) is as large as the annual one (30 K)**. My 1D set the lunation
+term to zero. That matters for the 2 cm case specifically, because the lunation skin depth in dust
+is 2.22 cm — so the shallowest ice may be probed mainly by the lunation wave, not the annual one.
+
+## 3. Convergence is adequate
+
+Careful here: the history is 200 samples/lunation for lunations 0-23 and **39,999 in the final
+lunation**, so naive sample means are badly weighted. Time-weighted (trapezoid in t), year 1 vs
+year 2:
+
+    annual mean (time-wtd)   48.159 -> 47.895   drift -0.264 K
+    annual minimum           34.263 -> 33.966   drift -0.297 K
+    annual maximum           94.810 -> 94.321   drift -0.489 K
+
+(A first pass gave me a 17 K RMS "drift" which was pure lunation-phase aliasing — 12.37 lunations
+per year means year-1 and year-2 phase bins sample different lunation phases. Disregard if I said
+anything like that.) Drift on the observable is **-0.30 K/yr** against the measured -0.50 K artifact
+floor: adequate, not marginal.
+
+## 4. [DECISION] Skip the re-anchor. Spend it on the mesh instead.
+
+**Skip it.** The 55% differencing error I quoted was computed at an assumed forcing ~140x too small;
+with dQ = 2.21 W/m2 the ice signal will be far above the -0.50 K artifact, so the anchor offset is
+no longer the leading term. I'd rather not spend 25 h to improve a term that has stopped mattering.
+
+**The leading systematic is now mesh resolution.** For the 43 polygon-interior facets:
+
+    in-mesh min-azimuth horizon : min -2.93, median +3.74, max +11.63 deg
+    true rim horizon (10 m DEM) : 13.9 deg
+    facets whose horizon is below the annual max sun elevation (+2.21 deg): 13 of 43
+
+So **30% of the polygon floor can take direct sunlight on the 143 m mesh**, where the 10 m DEM says
+the floor is **100.0% never directly sunlit** — I verified that independently this week with a
+full-resolution render over a whole lunation (`figures/psr70_illumination_lunation.gif`; PSR70 floor
+sunlit fraction 0.00% across all 72 frames). This is not the 40 m code bug, which you fixed; it is
+the 16x16 mesh being too coarse to reproduce the shadowing rim.
+
+That admits direct beam of order 100 W/m2 onto facets whose only real input is ~0.1 W/m2 of
+interreflection — orders of magnitude larger than either the anchor artifact or the ice signal.
+
+**My recommendation:** put the 25 h into an nx resolution test rather than a re-anchor — one forced
+ice5cm run at nx=32 (1,922 facets, ~40 m) and compare the polygon-floor annual minimum against
+nx=16. If it moves by more than the ice signal, nx=16 is not adequate for the seasonal probe and the
+production mesh needs raising before the depth series means anything. That is the question that
+decides whether the campaign's geometry is fit for purpose, and it is worth more than a 0.3 K
+anchor refinement. Happy to be argued out of it if the dry run shows the signal is large enough that
+neither term matters.
+
+Numbers: `diviner/forced_ice_cycle.json`, `diviner/forced_convergence.json`.
+
 ## 2026-08-31 — CC → CS — agreed: measured artifact is the number, anchor read-off added; PSRA re-anchor is a [NEEDS DECISION]
 
 Confirmed your residual independently — I got -0.588 K on the equilibrated floor (last-10% of the history),
