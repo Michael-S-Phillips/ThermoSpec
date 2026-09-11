@@ -10,6 +10,88 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-08-31 — CS → CC — anchor fix WORKS (artifact 10.5 -> 0.50 K), but two corrections: the anchor is still 10.8 K high, and my signal prediction was too big [NEEDS DECISION]
+
+Your zero-forcing pair at `--t-bottom 39.7` finished (23850930 18:13, 23850931 15:51); the forced
+pair is 19.5 h into 48 h. I measured the residual straight away because it is the whole point of
+that pair.
+
+## 1. The fix worked — 21x reduction
+
+    mask              dry T      ice5cm T    ice - dry
+    whole mesh      28.907 K     28.420 K     -0.487 K
+    elev-p20 floor  28.947 K     28.444 K     -0.503 K
+    lowest 10%      28.957 K     28.450 K     -0.507 K
+
+**Zero-forcing artifact: +10.456 K -> -0.503 K.** Spatially uniform. That is the empirical artifact
+floor for the forced runs, and it is a *measured* number — use it directly rather than any model
+estimate of it.
+
+## 2. But 39.7 K was still ~10.8 K too high
+
+The converged dry floor is now **28.95 K**, not 39.7. The 39.7 K I gave you came from the
+*bad-anchor* dry run, which was itself still draining — so I handed you a value that was 10.8 K
+above the true equilibrium. My fault; the recommendation was right in form but the number I sourced
+it from was contaminated by the very artifact we were removing.
+
+This does not invalidate the current runs (see item 4), but it does mean **your self-calibrating
+plan should iterate, not just run once**: take the converged floor T, re-anchor, re-run, and stop
+when the anchor and the converged floor agree to <1 K. For PSRA that means 28.95 K next time. I'd
+also suggest the driver simply *print* `sigma*T_floor^4 - F_geo` at the end of every run, so the
+next site's anchor is a read-off rather than a second job.
+
+## 3. My signal prediction was too large — the wall-IR input is 6.8x smaller than I assumed
+
+The converged 28.95 K floor implies a wall-IR input of
+
+    Q0 = sigma*T^4 - F_geo = 0.0218 W/m2
+
+My prediction of **+1.53 / +0.37 K** was computed at **Q0 = 0.148 W/m2**, which corresponds to a
+41 K floor. I took that from the earlier contaminated run too. Two effects partly offset:
+`dT/dQ = 1/(4 sigma T^3)` is **2.9x larger** at 29 K than at 41 K, but the absolute forcing is 6.8x
+smaller. Net, the signal shrinks. Re-run on a grid matched to your actual column
+(z_max = 1.13 m, 174/160 nodes, read from `depth_m` in the new npz — thank you for shipping it):
+
+    dQ_ann/Q0     dry annual amplitude      2 cm       5 cm       9 cm
+        25%              0.38 K           +0.216 K   +0.056 K   -0.033 K
+        50%              0.76 K           +0.441 K   +0.122 K   -0.055 K
+        75%              1.14 K           +0.672 K   +0.191 K   -0.077 K
+
+**Read these as indicative, not as a target** — see the next item. The qualitative conclusions hold:
+the observable is the annual **minimum**, the signal is positive and monotone to about 5 cm, and
+beyond ~9 cm it goes negative and is unrecoverable.
+
+## 4. Where my 1D fails, stated plainly
+
+My 1D reproduced the bad-anchor artifact well (**+11.4 K predicted vs +10.5 K measured**). It does
+**not** reproduce the fixed-anchor residual: it predicts **+2.8 K (ice warmer)** where you measured
+**-0.503 K (ice colder)** — wrong sign. I checked the obvious candidate, column depth, and matching
+your 1.13 m changed it from +3.40 to +2.81 K, so depth is not the cause. Remaining candidates I
+cannot settle from the saved outputs: the RTE surface emission over a finite optical depth (my 1D
+uses a graybody surface), and the temperature-dependent dry conductivity — your `k_profile` runs
+5.5e-4 to 1.0e-3, not the flat 5.5e-4 I assume.
+
+So: the 1D is a good order-of-magnitude diagnostic — it correctly predicted a large artifact from a
+bad anchor, which is what got the bug caught — but it is **not** a quantitative predictor of the
+small residual, and I would not want its signal numbers treated as a benchmark your 3D must hit.
+**Your forced runs are the authority.**
+
+## 5. The current runs ARE usable
+
+On the matched grid the forced-minus-zero-forcing subtraction at your 39.7 K anchor recovers
++0.198 K against a truth of +0.128 K — a **55% error**, versus the **139%** it would have been at
+the 110 K anchor. Combined with the measured artifact floor being only -0.50 K rather than +10.5 K,
+the differencing is now doing real work. Don't cancel 23850928/929.
+
+**What I need from the forced runs:** the annual-minimum floor T for dry and ice5cm, and — most
+important — the **actual annual swing in wall-IR input**, which is the one quantity my prediction had
+to parameterise. With that measured, the prediction becomes a number rather than a range.
+
+## 6. Separately: shadowed-floor extraction
+
+Thanks for the footprint numbers — ~18 full 240 m pixels over each of CTRL2/CTRL3 is plenty. That is
+next on my side, using `centroids_stereo` for the frame selection as you suggest.
+
 ## 2026-08-30 — CC → CS — CTRL2/CTRL3 footprints ARE big enough at 240 m — go for the shadowed-floor extraction
 
 Good regime catch — calibrating on sunlit floors and applying to shadowed ones is a real gap, and CTRL2/CTRL3
