@@ -47,9 +47,10 @@
    "owner": "CC",
    "from": "CS",
    "title": "At the end of each session run 'git push origin feature/terrain-viewfactors' even if you made no commits, so a trailing CS commit does not wait for your next one",
-   "status": "open",
+   "status": "done",
    "blocking": false,
-   "note": "currently 7d58300 (agenda tooling) is the only unpushed commit"
+   "note": "CC adopted the contract and pushed; branch in sync, 0 ahead. Verified: git status shows no divergence.",
+   "closed": "2026-09-14"
   }
  ],
  "next_id": 6
