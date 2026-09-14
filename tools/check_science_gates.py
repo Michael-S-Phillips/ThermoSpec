@@ -119,10 +119,49 @@ def gate_forcing(d, fname=""):
     return ok, (f"sun elev {se.min():+.2f}..{se.max():+.2f} deg (span {span:.2f}), "
                 f"crosses horizon={crosses}, duration {dur_d:.0f} d (need >300 d for annual)")
 
+def gate_drift(d):
+    """G5 matched-season convergence (CS 2026-09-02): a seasonal run whose floor still drifts
+    year-over-year has not equilibrated, so no ice-signal magnitude/sign can be claimed from it. On the
+    per-facet floor history, take the time-weighted floor-mean per lunation and compare lunation L to L+12
+    (~1 yr). Fail if |mean matched-season drift| > 0.1 K/yr. Needs a convergence npz (T_surf_crater_history);
+    skips otherwise. Prefers the polygon_floor mask over elev-p20."""
+    if "T_surf_crater_history" not in d.files or "t_history" not in d.files:
+        return None, "no crater history (not a convergence file)"
+    mask = None
+    if "polygon_floor" in d.files and np.asarray(d["polygon_floor"]).sum() > 0:
+        mask = np.asarray(d["polygon_floor"], bool)
+    elif "floor_elev_p20" in d.files:
+        mask = np.asarray(d["floor_elev_p20"], bool)
+    if mask is None:
+        return None, "no floor mask"
+    H = np.asarray(d["T_surf_crater_history"]); t = np.asarray(d["t_history"], float)
+    fm = H[mask].mean(axis=0)
+    P = 2551443.0
+    lun = ((t - t.min()) / P).astype(int)
+    means = {}
+    for L in np.unique(lun):
+        sel = lun == L
+        if sel.sum() < 2:
+            continue
+        ts, fs = t[sel], fm[sel]
+        if ts[-1] > ts[0]:
+            integ = float(np.sum(0.5 * (fs[:-1] + fs[1:]) * np.diff(ts)))   # trapezoid (np.trapz gone in numpy2)
+            means[L] = integ / (ts[-1] - ts[0])
+        else:
+            means[L] = float(fs.mean())
+    drifts = [means[L + 12] - means[L] for L in sorted(means) if (L + 12) in means]
+    if not drifts:
+        return None, f"run too short for matched-season drift (<2 yr; {len(means)} lunations)"
+    md = float(np.mean(drifts))
+    tag = "polygon" if ("polygon_floor" in d.files and mask.sum() == np.asarray(d["polygon_floor"]).sum()) else "elev-p20"
+    return abs(md) < 0.1, (f"matched-season (L vs L+12) drift {md:+.3f} K/yr over {len(drifts)} pairs "
+                           f"(need |drift|<0.1); {tag} floor n={int(mask.sum())}")
+
 def main():
     files = sys.argv[1:] or sorted(
         glob.glob(os.path.join(SYNC, "data", "**", "prod_*psr_floor*.npz"), recursive=True) +
         glob.glob(os.path.join(SYNC, "data", "**", "seasonal_*.npz"), recursive=True) +
+        glob.glob(os.path.join(SYNC, "data", "**", "*convergence*.npz"), recursive=True) +
         glob.glob(os.path.join(SYNC, "data", "**", "*thermal*.npz"), recursive=True))
     if not files:
         print("no run files found — nothing to check"); return 0
@@ -143,7 +182,8 @@ def main():
         for name, res in [("G1 shadow  ", gate_shadow(d)),
                           ("G2 IC drain", gate_ic(d, bf)),
                           ("G3 monotone", gate_monotone(d)),
-                          ("G4 forcing ", gate_forcing(d, f))]:
+                          ("G4 forcing ", gate_forcing(d, f)),
+                          ("G5 drift   ", gate_drift(d))]:
             ok, msg = res if res else (None, "n/a")
             tag = "SKIP" if ok is None else ("PASS" if ok else "FAIL")
             if ok is False: any_fail = True
