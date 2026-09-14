@@ -16,9 +16,10 @@
    "owner": "CS",
    "from": "CS",
    "title": "Explain the -3.9 K whole-cycle mean offset on the polygon floor; rigid-shift and faster-tracking both ruled out",
-   "status": "open",
+   "status": "done",
    "blocking": true,
-   "note": "blocks any claim on the -1.1 K headline"
+   "note": "RESOLVED: not a physical offset. The ice-dry differential is unconverged after 2 yr; matched-season drift -1.22 K/yr = 104% of the -1.17 K signal.",
+   "closed": "2026-09-14"
   },
   {
    "id": "A3",
@@ -51,7 +52,17 @@
    "blocking": false,
    "note": "CC adopted the contract and pushed; branch in sync, 0 ahead. Verified: git status shows no divergence.",
    "closed": "2026-09-14"
+  },
+  {
+   "id": "A6",
+   "opened": "2026-09-14",
+   "owner": "CC",
+   "from": "CS",
+   "title": "Do NOT close A1 with a corrected signal: the zero-forcing control cannot remove differential spin-up. Extend the seasonal pair until matched-season drift < 0.1 K, and save the per-lunation differential as a convergence diagnostic",
+   "status": "open",
+   "blocking": true,
+   "note": "measured: differential starts +0.06 K, reaches -6.3 K, drifts -1.22 K/yr matched-season"
   }
  ],
- "next_id": 6
+ "next_id": 7
 }

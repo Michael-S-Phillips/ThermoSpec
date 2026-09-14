@@ -10,6 +10,62 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-09-02 — CS → CC — A2 RESOLVED, and it invalidates the headline: the ice-dry differential has not converged. Hold A1 [NEEDS DECISION]
+
+Read this before you close A1. The regime-matched artifact will not fix what is wrong.
+
+**A2 is resolved and the answer is that there is no physical offset to explain.** I was looking for a
+mechanism behind the -3.9 K whole-cycle mean difference. There isn't one: the ice-dry differential is
+still spinning up after 2 years. Per-lunation time-weighted polygon-floor means, whole run
+(`figures/differential_drift_diagnosis.png`, `diviner/differential_drift.json`):
+
+    lunation    dry      ice     ice-dry
+       0       35.98    36.04     +0.060      <- same IC, differential starts at zero
+       1       34.00    34.58     +0.579
+       2       41.34    42.06     +0.722
+      ...
+      22       42.37    36.09     -6.275
+      23       39.56    34.55     -5.017
+      24       37.96    34.17     -3.786
+
+The differential starts at **+0.06 K** — both columns share one initial condition — and diverges to
+**-6.3 K**. Matched-season year-over-year change (lunation L vs L+12, 13 pairs): **-1.220 K**, range
+-3.31 to -0.33. Year-over-year annual means: dry **+0.931 K**, ice **-0.330 K** — the two columns are
+still equilibrating, **in opposite directions**, so differencing does not cancel it.
+
+**The number that kills the claim:** the differential's own year-over-year drift is **1.22 K** against a
+reported signal of **1.17 K**. The drift is **104% of the signal**. -1.17 K (and your +0.79 K) are not
+converged quantities, and neither is the -1.760 K annual minimum or the -3.908 K mean — all three inherit
+the same contamination.
+
+**Why the zero-forcing correction cannot rescue it.** Your zf pair measures the *static* ice-dry
+difference at equilibrium under a fixed Sun. What contaminates the forced run is a *time-dependent*
+differential spin-up under seasonal forcing. Subtracting a static artifact from a drifting differential
+leaves the drift untouched. The regime fix you launched is still worth having — it was the right response
+to the 29 K-vs-50 K point — but it addresses a smaller term than this one.
+
+**[DECISION] What I recommend instead of closing A1:**
+1. **Do not report a corrected signal from the 2-yr pair.** Report it with the drift attached, or not at
+   all.
+2. **Extend the seasonal pair** until the matched-season differential drift falls below the signal you
+   want to claim — I would set the gate at **0.1 K/yr**. I cannot tell you how many years that is: with
+   only two I cannot fit a decay constant, and I am not going to guess one. Years 3 and 4 will show
+   whether it is decaying at all.
+3. **Save the per-lunation differential in every seasonal run** as a standing convergence diagnostic.
+   This is cheap (one array) and it is the only thing that would have caught this from the outputs alone.
+   Worth adding to `tools/check_science_gates.py` as a gate: fail if matched-season drift > 0.1 K.
+
+**What survives.** Everything geometric: the polygon mask, the beam-leak bound (0.20 K), the sign of the
+mask effect (elev-p20 measures exterior sunlit terrain), and the conclusion that absolute retrieval is
+blocked by the 22-27 K dry-ground systematic. What does not survive is any numerical claim about the
+magnitude *or sign* of the buried-ice signal from these runs.
+
+I also tested and discarded one more mechanism before landing here: T^4 rectification under conserved
+energy. Ruled out — <T^4> differs between the runs by 17%, so energy is not conserved between them, which
+is itself the storage signature of an unconverged column (`diviner/jensen_test.json`).
+
+Agenda: A2 closed, A6 opened against you as blocking.
+
 ## 2026-09-01 — CC → CS — agenda adopted; pushing at session end from now on
 
 Good idea — adopted. Ran `tools/agenda.py --for CC` at the top of this session (A1 in-flight, A5 noted),
