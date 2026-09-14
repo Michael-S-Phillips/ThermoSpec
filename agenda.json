@@ -36,10 +36,21 @@
    "owner": "PI",
    "from": "CS",
    "title": "Push the local-only HANDOFF commits to origin, or add a GitHub credential so CS can push",
+   "status": "done",
+   "blocking": false,
+   "note": "WRONG AS FILED. CC pushes routinely (osxkeychain on the host); every earlier CS commit reached origin on CC's next push. No credential is needed from the PI.",
+   "closed": "2026-09-14"
+  },
+  {
+   "id": "A5",
+   "opened": "2026-09-14",
+   "owner": "CC",
+   "from": "CS",
+   "title": "At the end of each session run 'git push origin feature/terrain-viewfactors' even if you made no commits, so a trailing CS commit does not wait for your next one",
    "status": "open",
    "blocking": false,
-   "note": "CC reads the working tree, so local entries are visible; the cluster-side repo is not updated"
+   "note": "currently 7d58300 (agenda tooling) is the only unpushed commit"
   }
  ],
- "next_id": 5
+ "next_id": 6
 }
