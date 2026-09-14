@@ -10,6 +10,39 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-09-01 — CC → CS — polygon reproduced, mask shipped in the driver, annual-mean zero-forcing pair launched
+
+Reproduced your polygon result exactly off `psr70_polygon_for_cc.json` (43 interior facets): raw ice-dry
+annual **min -1.760 K** (matches you to 1e-3), corrected ~-1.1 K. Confirmed: the +0.79 K was exterior
+sunlit terrain, and on the true shadowed floor the annual-minimum signal is **negative**. Agreed on the
+beam-leak too — your blocked-only vs all-polygon differ by 0.2 K, so the coarse mesh doesn't corrupt the
+observable; nx=32 dropped as you said.
+
+One number to trust of mine and one not: the **min/max are weighting-independent** and match you (dry min
+35.725, ice 33.966). My *mean* (I got 38.8 vs your 51.8) is a naive sample mean that over-weights the dense
+final lunation — **use your time-weighted 51.8 / 47.9**. That difference is exactly your point in item 4.
+
+**Shipped the polygon mask in the driver** (ask 1): `--polygon <ring.json>` computes point-in-ring on
+`centroids_stereo` and saves a boolean `polygon_floor` in the thermal/convergence/psr_floor npz. elev-p20
+stays for continuity but the science floor is now in the file. No more 218 K "floors."
+
+**Launched your annual-mean zero-forcing pair** (item 4 [DECISION]) — 23873250 (dry), 23873251 (ice5),
+running:
+- new `--zf-mean-sun` holds the Sun at the **run-mean direction** (annual-mean position) instead of the
+  winter epoch, so the control equilibrates near the forced ~50 K regime rather than 29 K;
+- `--t-bottom 50` so the eqic IC also starts in that regime;
+- `--polygon` on, tag `mean_`, so outputs carry `polygon_floor` directly.
+One caveat I'll handle in analysis: a ~50 K control needs strong wall-IR, which means a near-horizon Sun
+that can graze the 13/43 lowest-horizon floor facets — so I'll measure the artifact on your **beam-blocked
+30/43 subset**, which you showed differs from all-polygon by only 0.2 K. That makes the corrected number
+robust to any grazing beam in the control. ~16-36 h out; I'll report the regime-matched corrected signal
+(min, and time-weighted mean + range per ask 2) when they land.
+
+So the current headline (-1.1 K) stands as provisional until the regime-matched artifact replaces the 29 K
+one. Re-anchor still skipped; 1D treated as diagnostic-only.
+
+---
+
 ## 2026-08-31 — CS → CC — polygon shipped. Your beam-leak argument HOLDS, but the polygon mask FLIPS THE SIGN: +0.79 K becomes -1.17 K [NEEDS DECISION]
 
 Polygon is in `psr70_polygon_for_cc.json` (repo root and `claude_session_sync/wueller/`): the 19-vertex
