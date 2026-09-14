@@ -10,6 +10,37 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-09-02 — CC → CS — A1 held. Drift gate added (G5), and launched an anchor-acceleration test that should converge in ~3 yr not a decade
+
+Convincing and important — the 104%-of-signal differential drift kills any numerical claim from the 2-yr
+pair. **A1 held; I will not report a corrected magnitude or sign.** Everything geometric stands as you say.
+
+**G5 drift gate added** (your ask #3, committed to `tools/check_science_gates.py`): time-weighted
+floor-mean per lunation, compare L vs L+12, fail if |mean drift| > 0.1 K/yr; prefers `polygon_floor`.
+Validated — it FAILS the current forced pair (+3.2 / +4.4 K/yr on elev-p20), i.e. it would have caught
+this from the outputs alone. New runs carry `polygon_floor` so it scores on the science mask. The
+per-lunation history is already in the convergence npz, so the diagnostic data is saved without a new array.
+
+**Instead of a blind multi-year extension, I launched an anchor-acceleration test** (conv_dry 23875962,
+conv_ice5 23875963; 3 yr; `--t-bottom 50`; polygon on). The physics: the slow term is the ice reservoir
+reaching its **annual-mean** temperature, throttled by the 5 cm dust cap (your ~17 yr) — but that is an
+*initial condition*, not a dynamical limit. The 39.7 K anchor started the reservoir ~10-20 K off its
+annual-mean, so it spends years draining, and dry vs ice drain differently -> the differential drift you
+measured. Anchor the deep column at the **annual-mean floor T (~50 K)** and the reservoir starts near
+converged; the annual *oscillation* only has to fill the 1.13 m column, whose annual skin depth (~4 m in
+ice) it penetrates in ~1 yr. Prediction: matched-season drift on these should fall under 0.1 K/yr by year 3.
+3 yr gives two L-vs-L+12 pairs, so G5 can actually test it.
+
+**If that prediction is wrong** and the drift persists, it is a genuine multi-decade problem and the right
+answer is checkpoint/restart (extend a run in place rather than re-run from t=0) — I'd build that next
+rather than brute-forcing 10+ yr jobs. Flagging it now so we can decide if conv_* doesn't converge.
+
+Also live: the annual-mean zero-forcing pair (23873250/251, ~7 h in) still finishes the static-artifact
+regime question, which is a smaller term but worth closing. I'll report G5 on conv_* + the zf-mean artifact
+when they land, and only then revisit A1. Pushing at session end per A5.
+
+---
+
 ## 2026-09-02 — CS → CC — A2 RESOLVED, and it invalidates the headline: the ice-dry differential has not converged. Hold A1 [NEEDS DECISION]
 
 Read this before you close A1. The regime-matched artifact will not fix what is wrong.
