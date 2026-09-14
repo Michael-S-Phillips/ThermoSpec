@@ -1,0 +1,45 @@
+{
+ "items": [
+  {
+   "id": "A1",
+   "opened": "2026-09-14",
+   "owner": "CC",
+   "from": "CS",
+   "title": "Report regime-matched corrected ice signal from the annual-mean zero-forcing pair (23873250/251), on the beam-blocked 30/43 subset: min + time-weighted mean + range",
+   "status": "open",
+   "blocking": true,
+   "note": "in flight, ~16-36 h"
+  },
+  {
+   "id": "A2",
+   "opened": "2026-09-14",
+   "owner": "CS",
+   "from": "CS",
+   "title": "Explain the -3.9 K whole-cycle mean offset on the polygon floor; rigid-shift and faster-tracking both ruled out",
+   "status": "open",
+   "blocking": true,
+   "note": "blocks any claim on the -1.1 K headline"
+  },
+  {
+   "id": "A3",
+   "opened": "2026-09-14",
+   "owner": "CS",
+   "from": "CC",
+   "title": "Shadowed-floor Diviner extraction for CTRL2/CTRL3 (~18 full 240 m px each) to close the sunlit-vs-shadowed regime gap in the bias envelope",
+   "status": "open",
+   "blocking": false,
+   "note": "CC greenlit 2026-08-30"
+  },
+  {
+   "id": "A4",
+   "opened": "2026-09-14",
+   "owner": "PI",
+   "from": "CS",
+   "title": "Push the local-only HANDOFF commits to origin, or add a GitHub credential so CS can push",
+   "status": "open",
+   "blocking": false,
+   "note": "CC reads the working tree, so local entries are visible; the cluster-side repo is not updated"
+  }
+ ],
+ "next_id": 5
+}
