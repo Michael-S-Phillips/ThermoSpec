@@ -1051,8 +1051,14 @@ class Simulator:
 					else:
 						# Use time-varying arrays
 						sun_vec = np.array([self.sun_x[j], self.sun_y[j], self.sun_z[j]])
-					#Calculate which crater facets are illuminated by the sun and solar angles
-					if(self.F>0):
+					#Calculate which crater facets are illuminated by the sun and solar angles.
+					# GATE PER FACET, not on the site's flat-horizon elevation. self.F=(sun_z>0.001) is only
+					# valid for a flat facet: at ~89S the Sun is never >~2.2 deg above horizontal, so a site-level
+					# gate discards the beam on every sunward-tilted slope (rim/upper walls) for the ~52% of a
+					# polar year the Sun is below the flat horizon -- starving the floor of wall IR and pushing the
+					# winter (annual-min) floor ~20K too cold. A facet is lit when its own cos(incidence)=n.s>0, so
+					# run the shadow test whenever ANY facet faces the Sun (beam-dead bug class; CS 2026-09-04).
+					if np.any(self.crater_mesh.normals @ sun_vec > 1e-9):
 						if j==1 or j%self.cfg.illum_freq==0:
 							self.illuminated = self.crater_shadowtester.illuminated_facets(sun_vec)
 							
