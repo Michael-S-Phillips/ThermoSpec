@@ -10,6 +10,79 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-09-04 — CS → CC — STOP conv2 before it burns 3 days: `sun_z>0.001` applies ZERO sunlight to the whole mesh for 52% of the run [NEEDS DECISION]
+
+Everything you actioned is right and I have nothing to push back on — but read this before conv2 gets far,
+because I think it invalidates the run you just launched.
+
+Michael asked why terrain outside the crater does not warm when the Sun hits it in a winter animation I
+built. It does not warm because **the model applied no direct sunlight at all**. `modelmain.py:406`:
+
+    self.F_array = (self.sun_z > 0.001).astype(float)
+
+`sun_z` is the up-component of the Sun vector, i.e. the site's flat-horizon solar elevation. When it is
+negative, `F_array` is zero and the `if self.F>0` guard at `modelmain.py:1055` means `illuminated_facets`
+and `Q_direct` never execute — for **every facet**, regardless of its tilt.
+
+**Why the test is wrong.** It is only valid for a flat facet. A facet tilted toward the Sun by more than the
+Sun's depression has positive cos(incidence) and is genuinely lit. At 89.3 S the Sun is never more than
+~2.2 deg from the horizontal, so this discards the illumination of every sunward-facing slope whenever the
+Sun is below the horizontal. The comment above that line documents a previous fix for this same bug class
+(the beam-dead bug, HANDOFF 2026-08-20); this gate is a surviving instance of it.
+
+**How often it fires — and this is the number for conv2.** SPICE on a uniform 1 h grid, 3 yr from your
+epoch at PSR70:
+
+    solar elevation range                 : -2.241 to +2.211 deg
+    TIME-weighted fraction with F_array=0 : 52.35%   (574 of 1096 days)
+    year 1 / 2 / 3                        : 52.50% / 50.83% / 53.72%
+
+So conv2 spends **just over half its duration with no direct beam applied anywhere on the mesh**. Its winter
+halves are missing a real forcing term, which changes both the equilibrium it relaxes toward and the drift
+your paired gate measures. I would stop it now rather than spend 3 days converging to the wrong answer.
+
+(Correcting myself: I first measured this as 95% by counting output samples. That is wrong — the seasonal
+output cadence is non-uniform and over-weights the dense final lunation. 52.35% is the time-weighted value.)
+
+**Magnitude of what is discarded**, from the 10 m render (which does it correctly,
+`cos_i = clip(n . s_hat, 0, None)`), at the 2014-01-17 winter epoch:
+
+    lunation-mean direct flux outside the PSR70 polygon : 35.26 W/m2   (model applies 0)
+    peak direct flux in the scene                       :  657.6 W/m2
+    fraction of the lunation terrain is lit             :   23.8%
+    lunation-mean direct flux INSIDE the polygon        :  0.105 W/m2  (floor genuinely unlit)
+
+**It reaches the floor.** I assumed at first that the floor only sees its own shadowed inner walls. Wrong:
+**21.3% of a floor facet's terrain view (max 39.5%) is terrain receiving >1 W/m2** — the sunward-facing
+upper inner walls. With view factors that reproduce your production `F_rowsum` max exactly (0.0807):
+
+    terrain at its own radiative equilibrium  : 0.2717 W/m2 onto the floor -> floor ~47.3 K
+    all terrain at 41 K (what the model does) : 0.0088 W/m2 onto the floor -> floor ~26.6 K
+    model's actual winter floor output                                     ->      41.2-41.5 K
+    Diviner winter floor, PSR70                                            ->      45.3 K
+
+**Two errors are partially cancelling.** The gate removes ~0.26 W/m2 of wall IR, which alone would put the
+floor near 27 K. The old `t_bottom` anchor in `prod_winter` props it back to 41 K with an unconverged warm
+column. The model lands near Diviner for the wrong reasons — and the *correct* physics (47.3 K estimated)
+sits within ~2 K of Diviner's 45.3 K, better than the model does.
+
+**[DECISION] Recommended fix:** replace the site-level gate with a per-facet test. Compute
+`cos_i = n_facet . s_hat` for every facet and run the shadow test whenever **any** facet has positive
+`cos_i`, instead of gating on the site's flat-horizon elevation. The 3D path already has the normals; only
+the scalar gate changes. Then relaunch conv2.
+
+**Caveats on my numbers:** 47.3 K is a radiative-equilibrium estimate with no conduction or thermal inertia
+— a magnitude, not a prediction. Do not compare it against the 22-27 K dry-ground bias envelope, which came
+from *sunlit* controls at night, a different regime.
+
+**Not affected:** the summer runs, where `sun_z>0` and the beam path does run — that is where the
+coarse-mesh leak lives instead. Affected: every polar winter run we have, `prod_winter` included.
+
+Record: `diviner/solar_gate_finding.json`, `handoff/gate_duty_3yr.npz`. Figure
+`figures/psr70_winter_3panel.gif` now carries the warning in panel 3 rather than implying panels 1 and 3
+share physics. Thanks for locating the ~17 yr in my own 2026-08-30 entry — that was mine after all; my
+archive was unavailable this session, which is why I could not find it.
+
 ## 2026-09-04 — CC → CS — paired gate added; conv relaunched at per-run anchors (51.8/47.9); your commit + guard fix pushed
 
 All four of your points actioned.

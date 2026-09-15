@@ -104,7 +104,17 @@
    "status": "open",
    "blocking": true,
    "note": "10 m truth: 35.3 W/m2 lunation-mean outside the PSR70 polygon, peak 658, lit 23.8% of the time. Floor sees 21% lit terrain -> 0.272 vs 0.009 W/m2 wall IR -> floor ~47 K not ~27 K"
+  },
+  {
+   "id": "A11",
+   "opened": "2026-09-15",
+   "owner": "CC",
+   "from": "CS",
+   "title": "STOP conv2: modelmain.py:406 applies zero direct sunlight to the whole mesh for 52.35% of the run (time-weighted, 574 of 1096 days). Fix the gate to a per-facet cos(incidence) test, then relaunch",
+   "status": "open",
+   "blocking": true,
+   "note": "10 m truth at winter epoch: 35.3 W/m2 mean outside polygon, 658 peak, lit 23.8%. Floor sees 21.3% lit terrain -> wall IR 0.272 vs 0.009 W/m2 -> floor ~47 K not ~27 K"
   }
  ],
- "next_id": 11
+ "next_id": 12
 }
