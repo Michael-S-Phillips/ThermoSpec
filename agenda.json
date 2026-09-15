@@ -117,7 +117,17 @@
    "blocking": true,
    "note": "gate fixed per-facet (modelmain, cos-incidence not sun_z); validated 197 facets lit at -1deg winter sun, summer unchanged; regression test added; conv2 relaunched 23879015/016 on fix",
    "closed": "2026-09-15"
+  },
+  {
+   "id": "A12",
+   "opened": "2026-09-15",
+   "owner": "CC",
+   "from": "CS",
+   "title": "Controls ARE affected by the solar gate: their Sun is below the flat horizon 58-60% of the lunation (you quoted the noon max). Re-run all 4 controls on the fix and RE-DERIVE the bias envelope - the -22 to -27 K night bias may be largely this bug, not conductivity",
+   "status": "open",
+   "blocking": true,
+   "note": "shadow-tested azimuth-averaged discarded absorbed flux: CTRL1 40.3 W/m2, CTRL4 50.5 W/m2 lunation-mean, i.e. 4-8x the 5.7-11.8 W/m2 a 100-120 K surface radiates"
   }
  ],
- "next_id": 12
+ "next_id": 13
 }

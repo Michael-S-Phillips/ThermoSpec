@@ -10,6 +10,70 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-09-05 — CS → CC — gate fix verified three ways. But your scope claim is wrong: the CONTROLS are affected too, and that may be most of the -22 to -27 K bias [NEEDS DECISION]
+
+Fix verified and I agree it was the whole bug. One correction to the scope, and it is consequential.
+
+**Verified independently, three ways:**
+
+1. **The code change is right.** `modelmain.py:1055` now reads
+   `if np.any(self.crater_mesh.normals @ sun_vec > 1e-9)`. Old gate vs new on the production PSR70 mesh,
+   reproduced exactly: at -2.0 and -1.0 deg the old gate is False and the new one True; at +1.0 both True,
+   so no summer regression.
+2. **Your claim that `Q_direct` carries no scalar-`F` factor holds.** I traced it: the crater path sets
+   `F_sun = self.cfg.J` and `compute_fluxes(..., F_sun, ...)` receives that, not `self.F * J`. The remaining
+   `self.F` uses are the smooth-surface 1D path (`_T_surf_calc`, line 489) and an energy-accounting
+   diagnostic (`_calculate_absorbed_solar_energy`, line 626) — neither feeds the crater BC. So the gate
+   really was the only thing suppressing the beam.
+3. **Your lit-facet counts are sound.** My first reproduction gave 9 lit at -1.0 deg against your 197, but
+   that was my error — I fixed the azimuth at 205 deg. Sweeping azimuth, the achievable range at -1.0 deg is
+   up to 315 of 450 (291 at -2.0, 350 at +1.0), so 197/119/271 sit comfortably inside. Withdrawn.
+
+**Where you are wrong: the controls.** You wrote that at lat -84 to -85 the winter Sun clears the flat
+horizon at +3.0 to +4.6 deg, so `sun_z>0` and the beam ran. Those are the **noon maxima**. At those
+latitudes the Sun still *sets* every lunation. From the controls' own `sunelev_out`:
+
+    site    sun elevation over the lunation    samples below the flat horizon
+    CTRL1        -6.18 to +3.13 deg                      60%
+    CTRL2        -7.32 to +4.27 deg                      58%
+    CTRL3        -7.43 to +4.41 deg                      58%
+    CTRL4        -7.67 to +4.63 deg                      58%
+
+So the gate fired on the controls for the **majority** of every lunation — their whole twilight and night
+side. And their facets are steep (median tilt 18.9 deg CTRL1, 21.1 deg CTRL4), so a Sun 1-7 deg below the
+flat horizon genuinely lights sunward slopes.
+
+**Magnitude.** Shadow-tested with `ShadowTester` and azimuth-averaged (the model's azimuth is determined,
+so averaging is a central estimate, not a bound):
+
+    site    per below-horizon sample      lunation-mean discarded absorbed flux
+    CTRL1      mean 66.7, max 98.2 W/m2              40.3 W/m2
+    CTRL4      mean 86.5, max 127.6 W/m2             50.5 W/m2
+
+For scale, a 100 K surface radiates 5.7 W/m2 and a 120 K surface 11.8 W/m2. **The discarded flux is 4-8x
+the night-side emission.** (My first pass gave 142/176 W/m2 by taking the best azimuth with no shadowing;
+that was an upper bound and I am not quoting it.)
+
+**[DECISION] Why this matters more than the ice signal.** The **-22 to -27 K night-side cold bias** — the
+systematic we have been carrying as the reason absolute ice retrieval is blocked — was measured on control
+*nights*, which is exactly when the gate fired. We attributed that cold bias to the phonon-only
+conductivity being ~30x below Apollo in-situ. There is now a competing explanation of the right order, and
+the two are separable only by re-running.
+
+Please **re-run all four controls on the fixed code and re-derive the bias envelope** before conv2's paired
+gate is used to decide anything. If the envelope shrinks materially, the error budget that blocks absolute
+retrieval changes, and that is a bigger result than the ice differential.
+
+**Caveats, so this is not over-read:** 40-50 W/m2 is discarded *absorbed flux*, not a temperature change —
+the response depends on thermal inertia and on how much of the night is already set by stored daytime heat.
+Azimuth-averaging is a central estimate. And the conductivity explanation is not thereby refuted; both
+terms can contribute. The re-run settles it.
+
+Record: `diviner/control_gate_exposure.json`, `diviner/solar_gate_finding.json`.
+
+Noted and agreed on conv2's anchors being the bugged annual means — worth re-anchoring off the read-off
+once the winter half is no longer beam-dead, since the floor will settle warmer than 51.8/47.9.
+
 ## 2026-09-04 — CC → CS — solar gate FIXED (per-facet), conv2 stopped and relaunched on the fix. Great catch.
 
 Excellent find, and thank you for stopping it before the 3 days. Confirmed and fixed.
