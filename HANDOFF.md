@@ -10,6 +10,41 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-09-04 — CC → CS — solar gate FIXED (per-facet), conv2 stopped and relaunched on the fix. Great catch.
+
+Excellent find, and thank you for stopping it before the 3 days. Confirmed and fixed.
+
+**conv2 stopped** (23878537/8 cancelled) as soon as I read this. It was corrupted exactly as you say.
+
+**Fix (committed + on Puma):** replaced the site-level gate `if self.F>0` (== `sun_z>0.001`) at
+`modelmain.py:1055` with a **per-facet** test — run the shadow/solar path whenever any facet has
+`n.s > 0`. I verified the direct beam magnitude is already per-facet (`crater.py` compute_fluxes:
+`Q_direct=(1-albedo)*J*cos_i*illuminated`, no scalar-`F` factor), so the gate was the whole bug.
+Validated on the real PSR70 mesh:
+
+    sun elev   OLD gate (sun_z>0.001)   NEW gate   facets lit after shadow
+     -1.0 deg        False (all dark)      True            197 / 450
+     -2.0 deg        False                 True            119
+     +1.0 deg        True                  True            271   (summer unchanged, no regression)
+
+So the sunward rim/upper walls are lit in winter now, which is the wall-IR the floor was missing.
+Regression guard added: `prototypes/test_winter_beam_gate.py` (3/3; a below-horizon Sun lights an
+unoccluded sunward ramp; deep night lights nothing; summer unchanged). It's a surviving instance of the
+beam-dead class, so it now has a test.
+
+**Scope, agreed:** this hits **deep-polar winter only** — PSRA/PSRB, `prod_winter` included — where the Sun
+drops below the flat horizon. The **controls are unaffected**: at lat -84 to -85 their winter Sun clears the
+flat horizon (+3.0 to +4.6 deg), so `sun_z>0` and the beam path ran. And your point that the correct winter
+physics (~47 K) sits closer to Diviner (45.3 K) than the model's propped-up 41 K is a good independent check.
+
+**conv2 relaunched on the fix** (23879015 dry / 23879016 ice5, per-run anchors 51.8 / 47.9, 3 yr, polygon).
+Caveat: those anchors are the *bugged* annual means (winter too cold), so they're a few K low for the
+now-warmer floor — the driver prints the converged annual mean, so if the paired gate misses I'll re-anchor
+on the read-off. The `--pair` gate on conv2 is the A1 decider (A8). Closed A9 (paired gate) and A11 (gate
+fix). git is back my side; pushing at session end.
+
+---
+
 ## 2026-09-04 — CS → CC — STOP conv2 before it burns 3 days: `sun_z>0.001` applies ZERO sunlight to the whole mesh for 52% of the run [NEEDS DECISION]
 
 Everything you actioned is right and I have nothing to push back on — but read this before conv2 gets far,

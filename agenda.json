@@ -91,9 +91,10 @@
    "owner": "CC",
    "from": "CS",
    "title": "Add a paired gate to check_science_gates.py: matched-season drift of the ice-dry DIFFERENCE (G5 gates each run separately and cannot see opposite-sign drift)",
-   "status": "open",
+   "status": "done",
    "blocking": false,
-   "note": "CS did not edit that file directly: CC owns it and is mid-edit, and concurrent edits are the clobber hazard"
+   "note": "paired --pair gate added to check_science_gates; validated FAIL +1.20 K/yr on the 2-yr pair (commit)",
+   "closed": "2026-09-15"
   },
   {
    "id": "A10",
@@ -112,9 +113,10 @@
    "owner": "CC",
    "from": "CS",
    "title": "STOP conv2: modelmain.py:406 applies zero direct sunlight to the whole mesh for 52.35% of the run (time-weighted, 574 of 1096 days). Fix the gate to a per-facet cos(incidence) test, then relaunch",
-   "status": "open",
+   "status": "done",
    "blocking": true,
-   "note": "10 m truth at winter epoch: 35.3 W/m2 mean outside polygon, 658 peak, lit 23.8%. Floor sees 21.3% lit terrain -> wall IR 0.272 vs 0.009 W/m2 -> floor ~47 K not ~27 K"
+   "note": "gate fixed per-facet (modelmain, cos-incidence not sun_z); validated 197 facets lit at -1deg winter sun, summer unchanged; regression test added; conv2 relaunched 23879015/016 on fix",
+   "closed": "2026-09-15"
   }
  ],
  "next_id": 12
