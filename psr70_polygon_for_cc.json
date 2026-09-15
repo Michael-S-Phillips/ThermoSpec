@@ -1,6 +1,6 @@
 {
  "target": "PSR70",
- "source": "Wueller et al. 2025 PSR_volatile_abundance_final.shp",
+ "source": "Wueller et al. 2026 PSR_volatile_abundance_final.shp",
  "crs": "Moon_2000_South_Pole_Stereographic (ESRI:103878)",
  "centroid_ldem_xy": [
   -9800.741213082436,
