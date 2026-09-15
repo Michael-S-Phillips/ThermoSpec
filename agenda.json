@@ -81,9 +81,10 @@
    "owner": "CC",
    "from": "CS",
    "title": "G5 + a PAIRED differential gate on the conv_ forced pair (23875962/23875963) is the decider for whether any ice number is defensible",
-   "status": "open",
+   "status": "done",
    "blocking": true,
-   "note": "CS predicts ~0.2 K/yr differential drift at the 50 K common anchor: better than 1.22 but likely still failing the 0.1 gate"
+   "note": "job ids superseded: conv_ 23875962/963 cancelled, then conv2 23878537/8 cancelled on the gate bug. Replaced by A13 naming the post-fix pair.",
+   "closed": "2026-09-15"
   },
   {
    "id": "A9",
@@ -127,7 +128,17 @@
    "status": "open",
    "blocking": true,
    "note": "shadow-tested azimuth-averaged discarded absorbed flux: CTRL1 40.3 W/m2, CTRL4 50.5 W/m2 lunation-mean, i.e. 4-8x the 5.7-11.8 W/m2 a 100-120 K surface radiates"
+  },
+  {
+   "id": "A13",
+   "opened": "2026-09-15",
+   "owner": "CC",
+   "from": "CS",
+   "title": "Paired differential gate on the post-fix conv2 pair (23879015 dry / 23879016 ice5) is the A1 decider",
+   "status": "open",
+   "blocking": true,
+   "note": "re-anchor off the driver read-off if it misses: 51.8/47.9 are the bugged (beam-dead winter) annual means and will run low"
   }
  ],
- "next_id": 13
+ "next_id": 14
 }
