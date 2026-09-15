@@ -28,18 +28,26 @@ def _sun(elev_deg, az_deg=35.0):
     return v / np.linalg.norm(v)
 
 
+def _ramp(nx=24, dx=125.0, slope_deg=12.0):
+    """A planar ramp rising toward +x, so every facet normal tilts toward -x (unoccluded sunward slopes)."""
+    m = np.tan(np.radians(slope_deg))
+    j = np.arange(nx) * dx * m
+    return np.tile(j, (nx, 1)), dx   # E[i,j] = m*x  -> normal ~ (-m,0,1)
+
+
 def test_sun_below_flat_horizon_still_lights_sunward_facets():
-    """A Sun 1 deg BELOW the flat horizon (old gate: F=0, whole mesh dark) must still light the
-    sunward-tilted slopes: the per-facet gate (any n.s>0) fires and the shadow test lights some facets."""
-    Z, dx = _bowl()
+    """A Sun 1 deg BELOW the flat horizon (old gate: F=0, whole mesh dark) must still light unoccluded
+    sunward-tilted slopes: the per-facet gate (any n.s>0) fires and the shadow test lights facets. Uses a
+    ramp so the sunward faces are not self-occluded the way a symmetric bowl's interior is."""
+    Z, dx = _ramp(slope_deg=12.0)
     m = DEMMesh(Z, dx=dx, dy=dx, origin="centroid")
-    s = _sun(-1.0)
-    old_scalar_gate = bool(s[2] > 0.001)                 # the buggy site-level gate
+    s = _sun(-1.0, az_deg=180.0)                          # Sun toward -x (ramp faces -x), 1 deg below horizon
+    old_scalar_gate = bool(s[2] > 0.001)                  # the buggy site-level gate
     new_perfacet_gate = bool(np.any(m.normals @ s > 1e-9))  # the fix
-    assert old_scalar_gate is False, "test sun should be below the flat horizon (old gate would zero it)"
-    assert new_perfacet_gate is True, "per-facet gate must fire: sunward slopes face a below-horizon Sun"
+    assert old_scalar_gate is False, "test Sun should be below the flat horizon (old gate would zero it)"
+    assert new_perfacet_gate is True, "per-facet gate must fire: ramp faces a below-horizon Sun"
     lit = (ShadowTester(m).illuminated_facets(s) > 0).sum()
-    assert lit > 0, "sunward slopes must be lit by a below-flat-horizon Sun (beam-dead regression)"
+    assert lit > 0, "unoccluded sunward slope must be lit by a below-flat-horizon Sun (beam-dead regression)"
 
 
 def test_deep_night_lights_nothing():
