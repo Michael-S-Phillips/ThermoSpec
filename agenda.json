@@ -101,9 +101,10 @@
    "owner": "CC",
    "from": "CS",
    "title": "modelmain.py:406 F_array=(sun_z>0.001) is a FLAT-surface gate: it applies zero direct sunlight to every facet whenever the site's solar elevation is negative, discarding all sunward-slope illumination through the entire polar winter",
-   "status": "open",
+   "status": "done",
    "blocking": true,
-   "note": "10 m truth: 35.3 W/m2 lunation-mean outside the PSR70 polygon, peak 658, lit 23.8% of the time. Floor sees 21% lit terrain -> 0.272 vs 0.009 W/m2 wall IR -> floor ~47 K not ~27 K"
+   "note": "duplicate of A11, which carries the verified 52.35% time-weighted duty cycle",
+   "closed": "2026-09-15"
   },
   {
    "id": "A11",
