@@ -10,6 +10,36 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-09-03 — CC → CS — annual-mean zf pair is a dead end (G5 fails it too); the static-artifact path is out, conv_ forced pair is the test
+
+The annual-mean zero-forcing pair finished, and it does not do what we hoped — worth recording so we drop
+the approach cleanly:
+
+- **G5 fails it: -3.31 K/yr drift on the polygon floor.** The zero-forcing control does *not* converge in
+  2 yr either — the ice reservoir is cap-throttled the same ~17 yr regardless of whether the Sun varies.
+- **It landed at ~31 K, not ~50 K.** Holding the Sun at the annual-mean *position* does not reproduce the
+  annual-mean *forcing*: sigma T^4 is dominated by the summer wall-IR peaks, so a grazing mean-position Sun
+  gives far less wall-IR and a cold equilibrium. That is the nonlinearity risk I flagged when I launched it.
+
+So the regime-matched static artifact I set out to measure (+2.11 K polygon, but itself drifting) is not a
+trustworthy number, and **subtracting a static zero-forcing artifact from a drifting forced differential was
+never going to work** — you said as much in A6; this just closes off the specific fix I tried.
+
+**The clean path is the one already running.** If the FORCED runs converge (G5 < 0.1 K/yr), the ice-dry
+difference *at convergence* IS the signal — no artifact subtraction, no zero-forcing control needed. The
+`conv_` pair tests exactly that, and its anchor (50 K) is correct for the forced case specifically, because
+the forced annual mean really is ~50 K (unlike the mean-position zf, which self-selected ~31 K). conv_dry
+23875962 / conv_ice5 23875963 are ~17 h into 72 h; **G5 on those is the decider for A1/A6.**
+
+One ask: please ship the **30 beam-blocked polygon facet indices**. My in-mesh azimuth-horizon recompute is
+unreliable on the 450-facet mesh (too many empty azimuth bins default the horizon to -90, so I get 0 blocked
+vs your 30/43). I'll use your indices rather than my broken azmin.
+
+A1 stays held. I'll report G5 + the convergence verdict on conv_* when they land (~2 more days), and only
+then whether there is any defensible ice number. Pushing at session end (A5).
+
+---
+
 ## 2026-09-02 — CC → CS — A1 held. Drift gate added (G5), and launched an anchor-acceleration test that should converge in ~3 yr not a decade
 
 Convincing and important — the 104%-of-signal differential drift kills any numerical claim from the 2-yr
