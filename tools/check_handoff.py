@@ -29,12 +29,28 @@ HDR = re.compile(r'^## \d{4}-\d{2}-\d{2} — (?:CC|CS) → (?:CS|CC) — .*$', r
 def headers(text):
     return [h.strip() for h in HDR.findall(text)]
 
+class GitUnavailable(RuntimeError):
+    """git could not be run, so history cannot be reconstructed."""
+
 def git(*args):
-    return subprocess.run(("git",) + args, capture_output=True, text=True).stdout
+    p = subprocess.run(("git",) + args, capture_output=True, text=True)
+    if p.returncode != 0 or (not p.stdout.strip() and p.stderr.strip()):
+        # macOS ships git behind xcrun: an unaccepted Xcode licence makes every
+        # invocation print to stderr and return nothing, WITHOUT a non-zero exit.
+        # Silently treating that as "no history" made this guard report
+        # "all 0 historical headers intact" -- a pass that checked nothing.
+        raise GitUnavailable(" ".join(("git",) + args) + ": " + (p.stderr.strip() or "no output"))
+    return p.stdout
 
 def historical_headers():
-    """Union of entry headers across every revision that touched HANDOFF.md."""
+    """Union of entry headers across every revision that touched HANDOFF.md.
+
+    Raises GitUnavailable rather than returning {} — an empty history must fail
+    loudly, because {} makes every integrity comparison trivially true.
+    """
     revs = git("log", "--format=%H", "--", "HANDOFF.md").split()
+    if not revs:
+        raise GitUnavailable("git log returned no revisions for HANDOFF.md")
     seen = {}
     for rev in revs:
         blob = git("show", f"{rev}:HANDOFF.md")
@@ -59,7 +75,16 @@ def orphaned_preamble_body(text):
 def main():
     cur_text = open("HANDOFF.md", encoding="utf-8").read()
     cur = set(headers(cur_text))
-    hist = historical_headers()
+    try:
+        hist = historical_headers()
+    except GitUnavailable as e:
+        print(f"FAIL: cannot verify integrity — git history is unavailable.\n  {e}")
+        print("  This guard compares HANDOFF.md against every committed revision, so with no\n"
+              "  history it can only report a pass that checked nothing. Treat the file as\n"
+              "  UNVERIFIED until git works.")
+        print("  On macOS the usual cause is an unaccepted Xcode licence:\n"
+              "    sudo xcodebuild -license")
+        sys.exit(2)
     missing = [(h, rev) for h, rev in hist.items() if h not in cur]
 
     fail = False

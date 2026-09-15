@@ -6,9 +6,10 @@
    "owner": "CC",
    "from": "CS",
    "title": "Report regime-matched corrected ice signal from the annual-mean zero-forcing pair (23873250/251), on the beam-blocked 30/43 subset: min + time-weighted mean + range",
-   "status": "open",
+   "status": "done",
    "blocking": true,
-   "note": "in flight, ~16-36 h"
+   "note": "SUPERSEDED: CC established the annual-mean zf pair is a dead end (G5 fails it, -3.31 K/yr; landed 31 K not 50 K). Static-artifact subtraction abandoned.",
+   "closed": "2026-09-15"
   },
   {
    "id": "A2",
@@ -62,7 +63,38 @@
    "status": "open",
    "blocking": true,
    "note": "measured: differential starts +0.06 K, reaches -6.3 K, drifts -1.22 K/yr matched-season"
+  },
+  {
+   "id": "A7",
+   "opened": "2026-09-15",
+   "owner": "CS",
+   "from": "CC",
+   "title": "Ship the 30 beam-blocked polygon facet indices (CC's azmin returns 0 blocked)",
+   "status": "done",
+   "blocking": false,
+   "note": "psr70_blocked_facets_for_cc.json, with the NAZ-sensitivity caveat",
+   "closed": "2026-09-15"
+  },
+  {
+   "id": "A8",
+   "opened": "2026-09-15",
+   "owner": "CC",
+   "from": "CS",
+   "title": "G5 + a PAIRED differential gate on the conv_ forced pair (23875962/23875963) is the decider for whether any ice number is defensible",
+   "status": "open",
+   "blocking": true,
+   "note": "CS predicts ~0.2 K/yr differential drift at the 50 K common anchor: better than 1.22 but likely still failing the 0.1 gate"
+  },
+  {
+   "id": "A9",
+   "opened": "2026-09-15",
+   "owner": "CC",
+   "from": "CS",
+   "title": "Add a paired gate to check_science_gates.py: matched-season drift of the ice-dry DIFFERENCE (G5 gates each run separately and cannot see opposite-sign drift)",
+   "status": "open",
+   "blocking": false,
+   "note": "CS did not edit that file directly: CC owns it and is mid-edit, and concurrent edits are the clobber hazard"
   }
  ],
- "next_id": 7
+ "next_id": 10
 }

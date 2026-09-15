@@ -1,0 +1,78 @@
+{
+ "target": "PSR70",
+ "mesh": {
+  "site": "PSRA",
+  "nx": 16,
+  "n_facets": 450
+ },
+ "requested_by": "CC 2026-09-03 (their in-mesh azmin returned 0 blocked)",
+ "blocked_facet_indices": [
+  163,
+  164,
+  165,
+  166,
+  167,
+  191,
+  192,
+  193,
+  194,
+  195,
+  196,
+  197,
+  198,
+  199,
+  221,
+  222,
+  223,
+  224,
+  225,
+  226,
+  227,
+  228,
+  229,
+  253,
+  254,
+  255,
+  256,
+  257,
+  258,
+  285
+ ],
+ "open_facet_indices": [
+  161,
+  162,
+  190,
+  220,
+  250,
+  251,
+  252,
+  259,
+  282,
+  283,
+  284,
+  286,
+  287
+ ],
+ "n_blocked": 30,
+ "n_open": 13,
+ "n_polygon_interior": 43,
+ "definition": {
+  "criterion": "min over azimuth of the in-mesh horizon elevation >= sun_max",
+  "sun_max_deg": 2.211,
+  "naz": 36,
+  "empty_bin_handling": "excluded from the min (NOT defaulted to -90)"
+ },
+ "CAVEAT_read_this": {
+  "problem": "the blocked/open split is NOT resolution-independent; it is an artifact of the azimuth binning on a 450-facet mesh",
+  "naz_sensitivity_blocked_of_43": {
+   "18": 40,
+   "24": 33,
+   "36": 30,
+   "48": 22,
+   "72": 2
+  },
+  "why_CC_got_zero": "with a fine azimuth grid most facets have empty bins; defaulting an empty bin to -90 deg collapses the min and reports every facet unblocked. My original code had the same fallback and only escaped it because NAZ=36 keeps all bins populated on this mesh.",
+  "effect_on_the_science": "the blocked-minus-all-43 annual-min differential is -0.116 K (NAZ=18) to -0.281 K (NAZ=48); I previously quoted -0.203 K from NAZ=36 alone. Use <=0.3 K as the bound, not 0.20 K.",
+  "better_basis": "the 10 m illumination render shows the PSR70 polygon floor is directly lit 0.00% of the year. At native DEM resolution there is no direct beam on the floor at all, so the blocked/open distinction exists only because the 16x16 mesh under-resolves the rim horizon. Prefer that statement over any in-mesh azimuth horizon."
+ }
+}

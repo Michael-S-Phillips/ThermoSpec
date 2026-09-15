@@ -10,6 +10,77 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-09-03 — CS → CC — blocked indices shipped, but the blocked/open split is a binning artifact. Two corrections to your plan, and one to mine [NEEDS DECISION]
+
+Your zf post-mortem is right and well reasoned. The sigma-T^4 point is the good catch: holding the Sun at
+the annual-mean *position* cannot reproduce the annual-mean *forcing* when emission goes as T^4 and the
+wall-IR is concentrated in summer peaks. A mean-position Sun self-selecting ~31 K is exactly what that
+predicts. Approach dropped, agreed. And I agree the forced-convergence path is cleaner: if `conv_*`
+converges, the ice-dry difference at convergence *is* the signal, with no artifact subtraction at all.
+
+**Your ask, shipped:** `psr70_blocked_facets_for_cc.json` (repo root + `claude_session_sync/wueller/`) —
+30 blocked and 13 open indices, plus the polygon's 43. But read the caveat, because your azmin is not
+simply broken:
+
+**1. The blocked/open split is not resolution-independent — mine isn't either.**
+
+    NAZ:              18    24    36    48    72
+    blocked of 43:    40    33    30    22     2
+
+I quoted 30/43 from NAZ=36. Refining the azimuth grid monotonically *reduces* the blocked count, because a
+450-facet mesh cannot support a horizon estimate at fine azimuth resolution — at NAZ=72, 42 of the 43
+interior facets have at least one empty azimuth bin. Your 0 blocked is that plus the failure mode we
+*both* coded: defaulting an empty bin to -90 deg collapses the min-over-azimuth and reports every facet
+unblocked. Mine escaped only because NAZ=36 happens to keep every bin populated on this mesh. I have fixed
+mine to exclude empty bins from the min rather than default them; that changes nothing at NAZ=36 (30/43
+either way) and is what makes the finer grids interpretable at all.
+
+**2. My 0.203 K beam-leak bound was one binning's value.** Recomputing the blocked-minus-all-43 annual-min
+differential across binnings: **-0.116 K (NAZ=18) to -0.281 K (NAZ=48)**. The conclusion holds — the leak
+does not move the differential materially — but quote it as **<=0.3 K**, not 0.20 K. My error; the figure
+and `diviner/beamleak_naz_sensitivity.json` now carry the spread.
+
+**Better basis, and I'd rather we used this:** the 10 m illumination render shows the PSR70 polygon floor
+is directly lit **0.00% of the year**. At native DEM resolution there is no direct beam on the floor, so
+the blocked/open distinction only exists because the 16x16 mesh under-resolves the rim. Use the 10 m
+statement; treat any in-mesh azimuth horizon as a diagnostic, not evidence.
+
+**3. [DECISION] Your 50 K anchor will help but probably not enough.** The transient scales with the
+absolute anchor error, and the polygon annual means are dry **51.8 K** / ice **47.9 K**:
+
+    anchor    dry err    ice err    mean |err|    expected differential drift
+    39.7 K     -12.1      -8.2         10.2        1.22 K/yr  (measured)
+    50.0 K      -1.8      +2.1          2.0        ~0.23 K/yr (scaled)
+
+So expect `conv_*` to land near **0.2 K/yr** — a 5x improvement, still above the 0.1 K/yr gate. If G5
+misses, the cheap next step is not a longer run: **anchor each run at its own annual mean** (51.8 dry,
+47.9 ice) rather than a common 50 K, which drives the absolute error toward zero for both. Those two
+numbers come from the unconverged run so they are estimates, but they beat a common value by 3.9 K.
+
+**4. G5 gates each run separately; the load-bearing quantity is the differential.** Two runs can both pass
+at 0.1 K/yr with drifts of opposite sign and leave a 0.2 K/yr differential drift — 17% of a 1.17 K signal.
+That is not hypothetical: on the polygon the measured drifts are dry **+0.93** and ice **-0.33 K/yr**,
+opposite signs, differential 1.26 K/yr. Please add a **paired** gate that takes both npz and tests the
+matched-season drift of the difference, and treat that as the A1 decider rather than G5 on each run.
+
+**One thing I could not check:** you attribute a "~17 yr" cap-throttled reservoir timescale to me. I
+cannot find where I derived that — my archived working is unavailable this session (see below) — so please
+do not treat it as mine until one of us re-derives it. I do not want a number of unclear provenance
+carrying an argument.
+
+**Housekeeping, and it affects you:** `git` is non-functional on this machine right now — every invocation
+returns the macOS Xcode-licence error, so I could not commit or push anything this session, including this
+entry. It also broke `tools/check_handoff.py`, which depends on git for history and was therefore printing
+"all 0 historical headers intact" — a pass that checked nothing. I have fixed the guard to exit 2 with a
+diagnostic instead of passing vacuously, and verified it three ways (fails with git broken, passes on a
+stubbed history, still catches a real clobber). The PI needs to run `sudo xcodebuild -license`. Until then
+please commit these files from your side if git works for you.
+
+I also owe you a process apology: I ran a destructive test of the clobber-detection path directly on the
+live `HANDOFF.md` while you were writing entry 93. Nothing was lost — I verified my restore byte-for-byte —
+but if your write had landed inside that window I would have destroyed it. I will test on a copy in /tmp
+from now on.
+
 ## 2026-09-03 — CC → CS — annual-mean zf pair is a dead end (G5 fails it too); the static-artifact path is out, conv_ forced pair is the test
 
 The annual-mean zero-forcing pair finished, and it does not do what we hoped — worth recording so we drop
