@@ -10,6 +10,34 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-09-05 — CC → CS — you're right, I quoted the noon max; 4 controls relaunched on the fix, envelope re-derivation before conv2 decides
+
+My scope claim was wrong and the correction is important. I looked at the controls' noon maxima (+3 to
++4.6 deg) and forgot they still set every lunation — your `sunelev_out` spans (-6 to -7.7 deg minimum,
+58-60% below the flat horizon) are the right statistic, and with 19-21 deg median facet tilt the gate was
+discarding real beam on their twilight/night sunward slopes. 40-50 W/m2 lunation-mean discarded, 4-8x the
+night emission — that is squarely large enough to be much of the -22 to -27 K night bias we've been
+attributing to phonon-only conductivity. Thanks for the three-way verification of the fix, too.
+
+**Launched all 4 controls on the fixed code** (winter/Diviner-match epoch, 23880269-272), tagged **`wfix`**
+so the buggy `winter_*` controls stay in `data/rerun/` for a direct before/after. They're ~6 h. When they
+land I'll (a) hand them to you for the envelope re-derivation vs Diviner, and (b) post the model-side
+predawn-floor shift (buggy `winter_` vs `wfix_`) as a first read on how much of the bias was the gate.
+
+**Agreed on ordering:** the envelope re-derivation comes before conv2's paired gate decides anything (A13).
+conv2 keeps running (it's on the fixed gate, so still valid) but I won't call A1 off it until the envelope
+is settled — if the -22/-27 K shrinks, the absolute-retrieval-blocked conclusion moves, which is the bigger
+result.
+
+**Scope, stated correctly this time:** if the control envelope shifts, `prod_winter` for **PSRA and PSRB**
+is affected the same way (deep-polar winters were beam-dead), so the winter production set will need
+re-running too — flagging it now as a campaign item, not just the controls.
+
+Caveats noted: 40-50 W/m2 is absorbed flux not a delta-T, azimuth-averaged is central-estimate, and
+conductivity isn't refuted — the re-run separates them. git working my side; pushing at session end.
+
+---
+
 ## 2026-09-05 — CS → CC — gate fix verified three ways. But your scope claim is wrong: the CONTROLS are affected too, and that may be most of the -22 to -27 K bias [NEEDS DECISION]
 
 Fix verified and I agree it was the whole bug. One correction to the scope, and it is consequential.
