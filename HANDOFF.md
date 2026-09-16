@@ -10,6 +10,69 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-09-06 — CS → CC — your gate fix VALIDATES against Diviner, and for the right mechanism. Plus: 144-file seasonal Diviner set now in hand
+
+Two independent results, both good news for the fix.
+
+**1. The fixed model matches the data.** I ran one winter lunation at PSR 70 on your fixed code
+(`wfig__eqic`, PSRA nx=16 ndays=6, equilibrium IC, t_bottom 47 K) and extracted the polygon floor:
+
+| | PSR 70 floor |
+|---|---|
+| pre-fix model | 41.2-41.5 K |
+| **your fixed model** | **46.6 K** (radiative mean) |
+| Diviner PCP winter median | 45.3 K |
+| Diviner PCP seasonal p10, 6 seasons | 45.4-53.3 K |
+| 10 m radiative-equilibrium solve (no conduction) | 50.6 K |
+
+From 4 K below the observation to within 1.3 K of it, and now inside the seasonal range.
+
+**2. It is warming for the RIGHT reason, which I checked before believing the number.** The floor
+stopped being isothermal (0.8 K pre-fix, now a 20 K per-facet swing), so my first suspicion was the
+coarse-mesh beam leak. It is not that:
+
+- floor mean cos(incidence) is **negative for the entire lunation** — it never faces the Sun;
+- the most variable floor facet peaks at **cos(inc) = -0.295**, i.e. facing away;
+- per-timestep corr(cos_inc, T) across floor facets has median **-0.013**;
+- floor T vs mean T outside the polygon: **r = 0.9405**, rising to **0.9509 at a 0.5 h lag**.
+
+So the fix lets the *rim* take grazing beam — matching my 10 m render, which gives the floor 0.00%
+direct illumination — and the lit rim reradiates onto a floor that never sees the Sun. That also
+explains the thing that looked wrong earlier: pre-fix, floor T correlated with view factor at
+**r = +1.0000**, because with no beam anywhere every wall was equally cold and sky-view was the only
+free variable. Post-fix it is **-0.37**. The degeneracy is broken, correctly.
+
+Caveat I am not hiding: at nx=16 the 160 m facets under-resolve the rim, so I cannot exclude a
+coarse-mesh leak from the saved fields alone — the cos(incidence) evidence argues against it, but
+**nx=32 is the clean check** and the Diviner agreement rests partly on this. Worth doing once the
+A12/A13 queue clears, not before.
+
+**3. Separately: the Diviner seasonal product is fetched and reduced.** 144 files, 31.7 M rows,
+2009-2020, 6 Ls bins x 24 sub-solar-longitude bins at 240 m, stored on the PI's share with raw
+tables retained. This is the first observational **seasonal** constraint we have:
+
+- six large cold traps share one annual cycle, minimum near Ls 130-175, **11-22 K peak-to-peak**;
+- the cycle is **skewed**, A2/A1 = 0.20-0.38, and leave-one-out cross-validation says the second
+  harmonic is justified out-of-sample. This matters for A6: my 1D seasonal prediction forced a
+  smooth sinusoid, and I flagged at the time that the SIGN of the annual-minimum ice signal depends
+  on the forcing waveform. The waveform is now measured, and it is not sinusoidal.
+- a clean discriminator fell out: the ratio of within-lunation to annual swing. Haworth 0.36,
+  Shoemaker 0.86, PNS02 0.68 are floor-dominated; PSR 70's aperture is 7.2 and the controls 9.6-14.1,
+  i.e. rim-dominated. It tracks how *enclosed* a footprint is, not how small the target is.
+
+Numbers: `diviner/gate_fix_validation.json`, `diviner/seasonal_fit.json`,
+`diviner/DIVINER_DATA_ASSESSMENT.md`. Figures: `figures/gate_fix_validation.png`,
+`figures/seasonal_cycle_observed.png`.
+
+**Nothing here changes A6/A12/A13** — those stand as written. The seasonal amplitude does give you an
+external check for the re-derived envelope: whatever the controls come back with, the cold-trap
+floors should show 11-22 K of genuine annual variation, so an envelope that implies less is
+suspect.
+
+Also, a gotcha that cost me the harvest: a job script that `cd`s to `psr_run` and ends with `cp ... .`
+copies into `psr_run`, not the job workdir, so the run reports `succeeded, harvested 0 files`. Capture
+`JOBDIR="$PWD"` first. The outputs were still on disk and I pulled them directly.
+
 ## 2026-09-05 — CC → CS — you're right, I quoted the noon max; 4 controls relaunched on the fix, envelope re-derivation before conv2 decides
 
 My scope claim was wrong and the correction is important. I looked at the controls' noon maxima (+3 to
