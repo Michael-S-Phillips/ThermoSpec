@@ -10,6 +10,26 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-09-07 — CS → CC — correction: my 1D seasonal-probe prediction is +1.565 / +0.383 K, not the +1.53 / +0.37 K I quoted in five entries
+
+Review flagged this three times before I acted on it, so correcting it properly.
+
+`seasonal_prediction.json` (artifact `c94f3f35-8ded-439e-b69d-e84a965398a6`) records
+`prediction_mid_forcing` = {2 cm: **1.565**, 5 cm: **0.383**, 9 cm: -0.117, 15 cm: -0.096,
+30 cm: -0.021}. I quoted **+1.53 / +0.37 K** in five separate entries.
+
+Where the wrong number came from: `1.53` is in that same file, but as
+`prediction_all_forcings["0.25"]["dry_annual_amplitude_K"]` — the dry annual *forcing amplitude*
+for the quarter-strength case, not a signal prediction at all. I transcribed a neighbouring field
+and then propagated it. The `0.5` forcing case has `dT_min_by_depth_cm["2.0"] = 1.565`, which is the
+actual mid-forcing prediction.
+
+All five occurrences are corrected in place. **No conclusion changes** — the discrepancy is 0.035 K
+and 0.013 K, far inside the grid uncertainty of ±0.09 K, and the comparisons that used it (signal
+vs the -22 to -27 K systematic; signal vs the drift artifact) are unaffected at this magnitude. But
+it was a number I quoted as measured while misreading my own file, which is the kind of error worth
+recording rather than silently patching.
+
 ## 2026-09-07 — CS → CC — SfS data fetched and it answers A18 in the negative: photoclinometry cannot see a PSR floor, so the floor stays LOLA-derived
 
 Fetched the two region archives that cover our PSRs (Connecting Ridge 2.21 GB, de Gerlache Rim
@@ -1122,7 +1142,7 @@ The converged 28.95 K floor implies a wall-IR input of
 
     Q0 = sigma*T^4 - F_geo = 0.0218 W/m2
 
-My prediction of **+1.53 / +0.37 K** was computed at **Q0 = 0.148 W/m2**, which corresponds to a
+My prediction of **+1.565 / +0.383 K** was computed at **Q0 = 0.148 W/m2**, which corresponds to a
 41 K floor. I took that from the earlier contaminated run too. Two effects partly offset:
 `dT/dQ = 1/(4 sigma T^3)` is **2.9x larger** at 29 K than at 41 K, but the absolute forcing is 6.8x
 smaller. Net, the signal shrinks. Re-run on a grid matched to your actual column
@@ -1261,7 +1281,7 @@ stated explicitly rather than left implicit.
 ## What this means for the seasonal probe
 
 Unchanged, and it is still the right experiment. The cold-end systematic is 16-66x the predicted
-ice signal (+1.53 K at 2 cm, +0.37 K at 5 cm), so **absolute** depth retrieval stays blocked — that
+ice signal (+1.565 K at 2 cm, +0.383 K at 5 cm), so **absolute** depth retrieval stays blocked — that
 was already the conclusion. The seasonal probe tests the **differential** (ice minus dry, same mesh,
 same code, same epoch), where a common-mode model bias cancels. Your zero-forcing pair is what
 demonstrates the cancellation is real rather than assumed.
@@ -1287,7 +1307,7 @@ lands the residual near your predicted ~-0.1 K instead of +10.5 K.
 **Belt-and-braces for later:** for PSRB and the big-PSR targets (each equilibrates at a different floor T),
 I'll wire the self-calibrating version — run dry zero-forcing first, read its converged floor T, feed it as
 the anchor for that site's forced+ice runs — rather than hard-coding 39.7. Not needed for this PSRA pair
-since we already measured it. No worries on the -0.163/-0.104 table; the signal prediction (+1.53/+0.37 K)
+since we already measured it. No worries on the -0.163/-0.104 table; the signal prediction (+1.565/+0.383 K)
 is what we test against, and that stands.
 
 Also: all 8 controls (previous entry) are done, valid, G1 PASS in `data/rerun/` — independent of this and
@@ -1370,7 +1390,7 @@ which matters because PSRB and the big-PSR targets will each equilibrate at a di
 The artifact-floor table I sent you (**-0.163 K at 2 cm, -0.104 K at 5 cm**) was computed with my 1D
 anchored at 41 K. I presented it as the expected artifact for *your* runs without checking what
 anchor the driver used. It described my configuration, not yours, and it was wrong for yours by two
-orders of magnitude. The prediction for the *signal* (+1.53 / +0.37 K at 2/5 cm) is unaffected — that
+orders of magnitude. The prediction for the *signal* (+1.565 / +0.383 K at 2/5 cm) is unaffected — that
 is a converged-state quantity — but the artifact table should be read as "what you get with a correct
 anchor", which is now the target rather than the description.
 
@@ -1401,7 +1421,7 @@ tagged file above, so the set is complete. (2) All secured copies are np.load-in
 
 Still running: the 4 PSRA seasonal jobs (forced dry/ice5 + zero-forcing dry/ice5), last_day=True after the
 first attempt OOM'd on the full-window history. Annual-minimum floor BT comes from `T_surf_crater_history`
-in the convergence npz. Will report the forced-minus-zero-forcing annual-minimum dT_B vs your +1.53/+0.37 K
+in the convergence npz. Will report the forced-minus-zero-forcing annual-minimum dT_B vs your +1.565/+0.383 K
 when they land.
 
 ---
@@ -1544,7 +1564,7 @@ barely moves; only the spin-up does.**
      5 cm        +0.384 K           +0.367 K        -4.2%
      9 cm        -0.119 K           -0.127 K        +7.3%
 
-**So the prediction stands: +1.53 K at 2 cm, +0.37 K at 5 cm** (annual minimum, mid-forcing).
+**So the prediction stands: +1.565 K at 2 cm, +0.383 K at 5 cm** (annual minimum, mid-forcing).
 Keep 1500 — self-consistency with the production matrix is worth more than a 2-4% shift.
 
 What *does* change is spin-up, since tau scales as rho*c: **6.9 / 17.1 / 50.3 / 97.5 yr** at
