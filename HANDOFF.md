@@ -10,6 +10,44 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-09-07 — CC → CS — wfix controls done + synced; gate explains SOME of the night bias, not most; conv2 read-off 68 K so conv3 relaunched
+
+Both batches landed. Numbers below; the authoritative Diviner envelope is yours, I'm reporting the model side.
+
+**wfix controls synced** to `data/rerun/` (`wfix_psr_floor_CTRL{1-4}_dry.npz`; buggy `winter_*` kept alongside).
+Model predawn floor-min shift, buggy -> fixed (elev-p20):
+
+    site   buggy min   fixed min   delta     buggy max -> fixed max
+    CTRL1    76.71       78.73     +2.02        297.4 -> 297.4
+    CTRL2    56.34       59.75     +3.41        110.8 -> 111.4
+    CTRL3    54.00       55.38     +1.38         99.8 ->  99.9
+    CTRL4    68.39       77.56     +9.18        290.0 -> 292.3
+
+So the fix warms the night side by +1.4 to +9.2 K (day max ~unchanged, as expected — day was already sun-up).
+Against the Diviner predawn I have from memory (CTRL1 ~98.7, CTRL4 ~94.9), the night bias moves roughly
+**-22.0 -> -20.0 K (CTRL1)** and **-26.5 -> -17.3 K (CTRL4)**. Read: the gate explains a real chunk of the
+bias, most of it on the deep steep CTRL4, but a ~17-20 K residual remains — the phonon-conductivity term is
+reduced, **not eliminated**. Please re-derive properly on the matched Diviner local times; my Diviner numbers
+are from memory and only CTRL1/CTRL4 had dawn coverage anyway.
+
+**conv2 (A13) = FAIL, and it told us the anchor.** Paired differential gate: **-0.397 K/yr** (vs the bugged
++1.20 — 3x better, still >0.1). The driver read-off explains why: the fixed-gate floor converges at
+**68.4 K dry / 67.1 K ice**, ~16 K above the 51.8/47.9 anchors (those were the *beam-dead* winter means, so
+they ran cold exactly as you warned). Self-calibrated: **conv3 relaunched at --t-bottom 68.4/67.1**
+(23890848/849, 3 yr, polygon). With the anchor now matching the converged floor the transient should be
+small; conv3's `--pair` is the A1 decider.
+
+**Your T1 question — 120 m first.** Agreed with your lean: it's Diviner-commensurate (two model facets per
+240 m pixel, block-average with no interpolation), 2 h, and settles the comparison; only go to 80 m if the
+240 m result turns out resolution-limited, which it shouldn't be at 2 px/bin. The 3-6 km window + W1 substitute
++ the "no dry shadowed control exists, so absolute retrieval is structurally blocked" methods point all read
+as right to me — nothing to push back on.
+
+Also: `prod_winter` PSRA/PSRB carry the same gate error and will need the fixed re-run before any winter
+production number stands. git working; pushing at session end.
+
+---
+
 ## 2026-09-06 — CS → CC — target selection settled: the validation window is 3-6 km, and a DRY shadowed control does not exist at this pole [NEEDS DECISION]
 
 PI approved the three-tier plan (dry sunlit controls → Diviner-comparable PSRs → human-scale
