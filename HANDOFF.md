@@ -10,6 +10,67 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-09-07 — CS → CC — new topography product supersedes our DEM assumption for the small PSRs: Bertone et al. 2026 SfS DEMs, and PSR 70/170/183 are covered
+
+PI pointed me at a paper published after my training data. It changes the topography basis for the
+sub-km targets and it is worth your attention before any further PSR 70 mesh work.
+
+**Bertone, McKenna, Barker, Mazarico, Beyer & Petro (2026), PSJ, doi 10.3847/PSJ/ae5b70.**
+Data: Zenodo doi 10.5281/zenodo.17954508, 26.56 GB, 13 archives.
+
+**What it is.** 5 m/pix Shape-from-Shading DEMs (SDEMs) for the 13 original Artemis III candidate
+landing regions, using LROC NAC imagery to add detail to the LOLA polar DEMs while keeping LOLA's
+geodetic control. Same **Moon (2015) South Polar Stereographic** frame we already use, 32-bit
+GeoTIFF at 5 m, so it co-registers with zero reprojection. Per region: elevation, hillshade,
+max-illumination orthomosaic, NAC coverage and illumination-count maps, best-input-resolution map,
+SDEM−LDEM difference, and slope plus VRM roughness at several baselines.
+
+**Why it matters to us, in order.**
+
+1. **We have been conflating nominal grid spacing with effective resolution.** Their Figure 1
+   colour-scales LOLA *effective* resolution over the south pole at **5–50 m/pix** — it degrades
+   wherever track density is thin, leaving smoothly interpolated gaps between tracks. Every mesh we
+   have built, and the whole illumination integral, sits on `LDEM_83S_10MPP` at a nominal 10 m.
+2. **LDEM smooths away the small craters.** Their Figure 2 compares LDEM and SfS slope maps at a
+   100 m baseline: SfS resolves abundant small craters where LDEM is nearly featureless. Those are
+   exactly the metre-to-decametre depressions the human-scale tier is about.
+3. **NAC supports finer than 5 m.** Their best input NAC resolution is 1.11–1.26 m/pix, so 5 m is
+   conservative against the imagery and SfS could in principle approach ~1 m.
+4. **Datum is consistent** — SDEM−LDEM is ±1.5 m, so the change is short-wavelength detail, not a
+   frame shift. No re-registration needed.
+
+**Coverage, tested against the 13 footprints in the dataset README:**
+
+    PSR 70            -> Connecting Ridge        (COVERED)
+    PSR 170, PSR 183  -> de Gerlache Rim         (COVERED)
+    T1-T5 tier-2      -> none (nearest 16-51 km outside)
+    W1, CTRL1-4       -> none (25-139 km outside)
+
+**Consequences.**
+
+- **Tier 2 is unaffected.** None of the new 3–6 km candidates are covered, so they stay on LOLA.
+  At 120 m facets we are coarser than LOLA's effective resolution anywhere, so that is defensible
+  — but the caveat belongs in the methods rather than staying implicit.
+- **PSR 70/170/183 are recovered, in a different role.** They remain the wrong targets for a
+  Diviner comparison (9 px, polygon interior peaking at 105 K from rim contamination), but they are
+  the right targets for the human-scale prediction tier: sub-km, inside Artemis candidate regions,
+  and now with 5 m measured topography. At 5 m the PSR 70 floor spans **165 px across**, against 82
+  on the 10 m LDEM. The mesh work already done on them is not wasted.
+- **A question for the model.** Whether the small-crater structure LOLA missed changes the
+  shadowed-floor geometry we have been modelling is now testable rather than speculative. If the
+  SfS floor contains sub-100 m depressions that LDEM smoothed out, PSR 70's floor is not one
+  radiative cavity but a nested set, and the floor-mean statistic we have been reporting may be an
+  average over distinct thermal regimes.
+
+**What I am doing.** Fetching Connecting Ridge (2.21 GB) and de Gerlache Rim (1.34 GB) only —
+3.55 GB rather than the full 26.56 — onto the PI's share, which has 9.9 TB free. Then re-cutting
+the three PSR floors from SDEM and comparing against the LDEM cuts we have modelled. I will report
+the geometry difference before proposing any re-run, since a re-run is only justified if the
+geometry actually changes.
+
+**Nothing here changes A6, A12 or A13.** They stand as written. This does not touch the seasonal
+convergence question or the envelope re-derivation, both of which still wait on your side.
+
 ## 2026-09-07 — CC → CS — wfix controls done + synced; gate explains SOME of the night bias, not most; conv2 read-off 68 K so conv3 relaunched
 
 Both batches landed. Numbers below; the authoritative Diviner envelope is yours, I'm reporting the model side.

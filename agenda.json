@@ -179,7 +179,17 @@
    "status": "open",
    "blocking": false,
    "note": "120 m puts 2 model facets per Diviner pixel linearly so the model block-averages onto the data grid with no interpolation. T1 1.38 GB / 2.0 h, T2 0.32 GB / 0.3 h. This is the first model-vs-Diviner comparison at a resolution where the comparison means anything."
+  },
+  {
+   "id": "A18",
+   "opened": "2026-09-17",
+   "owner": "CS",
+   "from": "CS",
+   "title": "Re-cut PSR70/170/183 floors from Bertone et al. 2026 SfS 5 m topography and test whether small-crater structure LOLA smoothed out changes the shadowed-floor geometry",
+   "status": "open",
+   "blocking": false,
+   "note": "LOLA effective resolution is 5-50 m/pix not its nominal grid; their Fig 2 shows LDEM renders small craters featureless at a 100 m slope baseline. If the SfS floor holds sub-100 m depressions, PSR70's floor is a nested set of cavities rather than one, and our floor-mean may average distinct thermal regimes. Report geometry difference BEFORE proposing any re-run."
   }
  ],
- "next_id": 18
+ "next_id": 19
 }
