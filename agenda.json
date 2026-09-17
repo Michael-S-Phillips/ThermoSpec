@@ -28,9 +28,10 @@
    "owner": "CS",
    "from": "CC",
    "title": "Shadowed-floor Diviner extraction for CTRL2/CTRL3 (~18 full 240 m px each) to close the sunlit-vs-shadowed regime gap in the bias envelope",
-   "status": "open",
+   "status": "done",
    "blocking": false,
-   "note": "CC greenlit 2026-08-30"
+   "note": "NOT ACHIEVABLE AS SCOPED. Measured permanently-shadowed extents (min-over-azimuth horizon vs each site's sun max): CTRL1 15.4 Diviner px, CTRL2 7.9, CTRL3 3.6, CTRL4 1.0 - CTRL2/3 are at or below PSR70's 9 px. Ordering is also reversed: CTRL1 (highest lat, lowest sun) has the largest shadowed floor. Further, NO dry shadowed control exists at this pole: of 680 never-lit components with Diviner coverage, 656 are <60 K, 24 are 60-110 K, and ZERO exceed 110 K - a never-lit floor is cold by construction. The sunlit-vs-shadowed gap is structural, not a data gap. Replaced by A16 (W1).",
+   "closed": "2026-09-17"
   },
   {
    "id": "A4",
@@ -138,7 +139,47 @@
    "status": "open",
    "blocking": true,
    "note": "re-anchor off the driver read-off if it misses: 51.8/47.9 are the bugged (beam-dead winter) annual means and will run low"
+  },
+  {
+   "id": "A14",
+   "opened": "2026-09-16",
+   "owner": "CS",
+   "from": "CS",
+   "title": "nx=32 rerun of the PSR70 winter figure case to confirm the 46.6 K floor is not partly coarse-mesh beam leak",
+   "status": "open",
+   "blocking": false,
+   "note": "cos(incidence) evidence argues against a leak (floor cos_inc<0 all lunation, hottest facet peaks facing away) but nx=16 cannot exclude it from saved fields; the Diviner agreement rests partly on this. Low priority until A12/A13 clear."
+  },
+  {
+   "id": "A15",
+   "opened": "2026-09-16",
+   "owner": "CS",
+   "from": "CS",
+   "title": "Polar diurnal Diviner set (192 files) fetching: replaces the equatorial curve currently used to validate the model diurnal envelope",
+   "status": "open",
+   "blocking": false,
+   "note": "winter bins (ltim97-192) are the ones that matter for PSRs; will give a direct data check on the 16.8 K model floor lunation swing"
+  },
+  {
+   "id": "A16",
+   "opened": "2026-09-17",
+   "owner": "CS",
+   "from": "CS",
+   "title": "Run W1 as the warm shadowed control: 3.07 km floor at -84.80/43.82, Diviner median 90.0 K, 128 px at 240 m, 5202 facets / 0.22 GB / 11 min",
+   "status": "open",
+   "blocking": false,
+   "note": "closest available substitute for a dry shadowed control, which does not exist at this pole. Above ~110 K surface ice is unstable over Gyr so W1's top few cm are dry while the floor is genuinely never-lit. Validates the SURFACE energy balance only - ice may persist at depth, so not a subsurface control."
+  },
+  {
+   "id": "A17",
+   "opened": "2026-09-17",
+   "owner": "CS",
+   "from": "CS",
+   "title": "Tier 2 first runs: T1 (4.85 km, -88.92/150.60, 106-309 Diviner px/bin) then T2 (3.36 km, -89.63/-48.22, 78-133 px) at 120 m facets over a 2-diameter box, winter epoch, dry",
+   "status": "open",
+   "blocking": false,
+   "note": "120 m puts 2 model facets per Diviner pixel linearly so the model block-averages onto the data grid with no interpolation. T1 1.38 GB / 2.0 h, T2 0.32 GB / 0.3 h. This is the first model-vs-Diviner comparison at a resolution where the comparison means anything."
   }
  ],
- "next_id": 14
+ "next_id": 18
 }

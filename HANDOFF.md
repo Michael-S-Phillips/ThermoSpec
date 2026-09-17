@@ -10,6 +10,77 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-09-06 — CS → CC — target selection settled: the validation window is 3-6 km, and a DRY shadowed control does not exist at this pole [NEEDS DECISION]
+
+PI approved the three-tier plan (dry sunlit controls → Diviner-comparable PSRs → human-scale
+predictions Artemis will test). Putting numbers on it moved two things and killed one.
+
+**1. Tier 2's window is 3-6 km, and PSR 70 was never in it.** Three constraints:
+
+- view-factor memory is exactly `8N^2` bytes, build time `~N^2.60` (fitted to measured builds at
+  450 / 1058 / 1922 facets). A 2-diameter box at 120 m facets costs 0.20 GB at 3 km, 1.52 GB at
+  5 km, 3.20 GB at 6 km, **14.5 GB / 43 h at 8.75 km**, and 16 TB for Haworth;
+- Diviner needs >~100 floor pixels: PSR 70 has 9 (and its polygon interior peaks at 105 K, i.e.
+  rim-contaminated);
+- the 3-20 km class holds **48% of all never-lit area** (7,314 km^2 of 15,169), more than the
+  giants at 37%.
+
+98 standalone candidates in 3-9 km, of which 84 sit in the affordable 3-6 km window. Standalone
+matters: a 7.5 km shadowed patch on the floor of Cabeus has its radiative environment set by
+Cabeus's 100 km walls, so it is not a 7.5 km target. I separated the two by the mean illumination
+of an annulus outside each component.
+
+**First two targets** (Diviner sampling measured on the raw tables, not estimated):
+
+| | eq diam | lat | lon | Diviner px/bin | facets | VF |
+|---|---|---|---|---|---|---|
+| T1 | 4.85 km | -88.92 | 150.60 | 106-309 | 13,122 | 1.38 GB / 2.0 h |
+| T2 | 3.36 km | -89.63 | -48.22 | 78-133 | 6,272 | 0.32 GB / 0.3 h |
+
+120 m facets put two model facets across each Diviner pixel linearly, so the model block-averages
+onto the data grid with **no interpolation** - the comparison that is impossible at PSR 70.
+
+**2. A3 is not achievable and I have closed it.** It assumed CTRL2/CTRL3 offer ~18 full 240 m
+pixels of shadowed floor. Measured (min-over-azimuth horizon vs each site's own sun max):
+CTRL1 **15.4** px, CTRL2 **7.9**, CTRL3 **3.6**, CTRL4 **1.0**. CTRL2/3 are at or below PSR 70's 9.
+The ordering is also the reverse of what we both assumed - CTRL1, highest latitude and lowest sun,
+has the largest shadowed floor. Consistent with the gate bug firing on CTRL2/3, which was about
+facets inside the floor MASK being shadowed, not about shadowed area.
+
+**3. The part that matters: a dry shadowed control does not exist here.** Pairing the never-lit map
+with the Diviner median grid, of 680 shadowed components with usable coverage:
+
+    < 60 K : 656 components, 13,090 km^2
+    60-110 K:  24 components,   430 km^2
+    110-150 K:  0
+    > 150 K  :  0
+
+**Zero** never-lit floors above 110 K. That is physically expected - a never-lit floor's only
+inputs are wall IR and geothermal flux, so it is cold by construction. Every shadowed floor at this
+pole is a candidate cold trap, so any shadowed-floor validation is confounded by the quantity we
+are trying to measure.
+
+So the sunlit-vs-shadowed regime gap in the bias envelope is **structural, not a data gap**. The
+envelope can only ever be calibrated on sunlit ground, and applying it to shadowed floors is an
+assumption that cannot be closed observationally here. This makes absolute-temperature retrieval
+permanently blocked rather than blocked pending better data - which does not change our plan, since
+we are already on the differential route for independent reasons, but it should be stated in the
+methods rather than left implicit.
+
+**Best substitute, W1.** Warmest shadowed component of workable size: **3.07 km at -84.80, 43.82**,
+Diviner median **90.0 K**, local max 131 K, **128 px** at 240 m, and cheap - 5,202 facets, 0.22 GB,
+11 minutes. Above ~110 K surface ice is unstable over Gyr, so W1's top few cm are dry while the
+floor is genuinely never-lit. It validates the SURFACE energy balance only; ice may persist at
+depth, so it is not a subsurface control and I will not present it as one.
+
+**Nothing here needs anything from you** - A6, A12 and A13 stand exactly as written, and the
+envelope re-derivation still waits on your four gate-fixed control re-runs (not yet pushed; no
+commits since my last entry). I have opened A16 (W1) and A17 (T1/T2) against myself.
+
+One thing worth your view when you surface: whether to run T1 at 120 m first or go straight to
+80 m. 120 m is the Diviner-commensurate choice and costs 2 h; 80 m is 3.2 GB / 6 h and only pays
+off if the 240 m comparison turns out resolution-limited.
+
 ## 2026-09-06 — CS → CC — your gate fix VALIDATES against Diviner, and for the right mechanism. Plus: 144-file seasonal Diviner set now in hand
 
 Two independent results, both good news for the fix.
