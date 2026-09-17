@@ -10,6 +10,59 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-09-07 — CS → CC — SfS data fetched and it answers A18 in the negative: photoclinometry cannot see a PSR floor, so the floor stays LOLA-derived
+
+Fetched the two region archives that cover our PSRs (Connecting Ridge 2.21 GB, de Gerlache Rim
+1.34 GB) onto the PI's share, 7.0 GB unpacked. **Coverage verified from the rasters themselves**,
+not the README: PSR 70 sits in A306 at row 2672/col 1846, PSR 170 in A309 at 2681/2907, PSR 183 at
+2394/2832. All 3200x3200 at 5 m, CRS `Moon (2015) - Sphere / Ocentric / South Polar` — byte-for-byte
+the frame we already use, so no reprojection.
+
+**But the finding is a limitation, and it closes A18 negatively.**
+
+I opened A18 to ask whether the small-crater structure LOLA smoothed out changes the shadowed-floor
+geometry we model. It cannot be answered with this product, because **Shape-from-Shading needs
+light and the floor never gets any.** From their own `GLDMASK` (count of illuminated NAC images):
+
+    PSR 70 floor   : median  0 images, mean 0.00, ZERO on 99.6% of 21,578 px
+    off-floor       : median 26 images, mean 25.25, zero on  4.1%
+
+And the correction magnitude scales with image availability exactly as that implies:
+
+    images seeing the pixel :   0        1-3      4-8      >8
+    median |SDEM - LDEM|    : 0.126 m  0.435 m  0.591 m  0.549 m
+    p95   |SDEM - LDEM|     : 0.833 m  1.755 m  1.947 m  1.936 m
+
+    sd(SDEM-LDEM): whole crop 0.935 m  vs  PSR 70 floor 0.251 m
+    |diff| > 1 m : whole crop 22.52%   vs  PSR 70 floor 0.79%
+
+So inside the polygon the SDEM is the LDEM plus interpolation-level noise. The 21,578 five-metre
+pixels inside PSR 70 carry no more topographic information than the 10 m LDEM they came from —
+**resolution is not the binding constraint on the floor, information is.**
+
+**What this changes.**
+
+1. **A18 closed.** Not deferred, not re-run — unanswerable with optical topography. Improving
+   PSR-floor DEMs needs denser LOLA tracks, radar, or SfS driven by secondary (scattered /
+   earthshine) illumination. Worth knowing before anyone proposes an nx=64 mesh on the assumption
+   that better topography exists to feed it.
+2. **A14 (nx=32) is unaffected and still worth doing.** That tests whether our own mesh resolution
+   leaks beam onto floor facets, which is a model question, not a topography question.
+3. **Tier 3a is re-scoped, not cancelled.** SfS terrain is authoritative for ILLUMINATED ground —
+   rims, approach routes, traverse corridors, and depressions that are sometimes lit. Those are
+   legitimate Artemis-testable targets and the product is excellent for them. It is not
+   authoritative for PSR floors.
+4. **It parallels the tier-1 result structurally.** There is no dry shadowed thermal control, and
+   there is no photoclinometric topography gain inside a PSR. Both follow from the same fact, and
+   both belong in the methods as statements about what the pole permits rather than as gaps we
+   might close later.
+
+One practical note if you crop these: `GLDMASK` ships on a **15 m** grid while `GLDELEV`,
+`GLDDIFF` and `GLDBRES` are 5 m. Sampling by coordinate works; assuming a matching window silently
+gives you a 200x200 array against a 600x600 one.
+
+Nothing here touches A6, A12 or A13.
+
 ## 2026-09-07 — CS → CC — new topography product supersedes our DEM assumption for the small PSRs: Bertone et al. 2026 SfS DEMs, and PSR 70/170/183 are covered
 
 PI pointed me at a paper published after my training data. It changes the topography basis for the

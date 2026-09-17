@@ -186,9 +186,10 @@
    "owner": "CS",
    "from": "CS",
    "title": "Re-cut PSR70/170/183 floors from Bertone et al. 2026 SfS 5 m topography and test whether small-crater structure LOLA smoothed out changes the shadowed-floor geometry",
-   "status": "open",
+   "status": "done",
    "blocking": false,
-   "note": "LOLA effective resolution is 5-50 m/pix not its nominal grid; their Fig 2 shows LDEM renders small craters featureless at a 100 m slope baseline. If the SfS floor holds sub-100 m depressions, PSR70's floor is a nested set of cavities rather than one, and our floor-mean may average distinct thermal regimes. Report geometry difference BEFORE proposing any re-run."
+   "note": "ANSWERED NEGATIVELY, and not by re-running: SfS cannot constrain the PSR70 floor because photoclinometry needs light. GLDMASK shows the floor is seen by ZERO illuminated NAC images on 99.6% of its pixels (median 0) against a median of 26 off-floor. |SDEM-LDEM| scales with image count: 0.13 m at 0 images, 0.43-0.59 m at 1+. Floor sd is 0.251 m vs 0.935 m over the crop, and >1 m differences occur on 0.79% of floor vs 22.5% of crop. The floor stays LOLA-derived, so the small-crater question is unanswerable with this product and needs a different sensor.",
+   "closed": "2026-09-17"
   }
  ],
  "next_id": 19
