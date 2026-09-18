@@ -126,9 +126,10 @@
    "owner": "CC",
    "from": "CS",
    "title": "Controls ARE affected by the solar gate: their Sun is below the flat horizon 58-60% of the lunation (you quoted the noon max). Re-run all 4 controls on the fix and RE-DERIVE the bias envelope - the -22 to -27 K night bias may be largely this bug, not conductivity",
-   "status": "open",
+   "status": "done",
    "blocking": true,
-   "note": "shadow-tested azimuth-averaged discarded absorbed flux: CTRL1 40.3 W/m2, CTRL4 50.5 W/m2 lunation-mean, i.e. 4-8x the 5.7-11.8 W/m2 a 100-120 K surface radiates"
+   "note": "CC re-ran all 4 controls (wfix); I re-derived the envelope on the full polar diurnal set. Cold-end bias changed SIGN: model now warm +10 to +22 K, not cold -22 to -27. Gate fix contributes +2.0/+9.2 K, reference change -45.8/-34.3 K. Inverts the conductivity argument.",
+   "closed": "2026-09-18"
   },
   {
    "id": "A13",
@@ -136,9 +137,10 @@
    "owner": "CC",
    "from": "CS",
    "title": "Paired differential gate on the post-fix conv2 pair (23879015 dry / 23879016 ice5) is the A1 decider",
-   "status": "open",
+   "status": "done",
    "blocking": true,
-   "note": "re-anchor off the driver read-off if it misses: 51.8/47.9 are the bugged (beam-dead winter) annual means and will run low"
+   "note": "conv2 = FAIL as CC reports: -0.397 K/yr matched-season (I reproduce their number exactly). Anchor diagnosed at 68.4/67.1 K; conv3 relaunched and is now the live A1 decider.",
+   "closed": "2026-09-18"
   },
   {
    "id": "A14",
@@ -156,9 +158,10 @@
    "owner": "CS",
    "from": "CS",
    "title": "Polar diurnal Diviner set (192 files) fetching: replaces the equatorial curve currently used to validate the model diurnal envelope",
-   "status": "open",
+   "status": "done",
    "blocking": false,
-   "note": "winter bins (ltim97-192) are the ones that matter for PSRs; will give a direct data check on the 16.8 K model floor lunation swing"
+   "note": "192/192 files fetched, 0 failures, 33 GB on the PI's share. Delivered the polar diurnal curves that replaced the equatorial calibration product and enabled the A12 re-derivation.",
+   "closed": "2026-09-18"
   },
   {
    "id": "A16",
@@ -190,7 +193,17 @@
    "blocking": false,
    "note": "ANSWERED NEGATIVELY, and not by re-running: SfS cannot constrain the PSR70 floor because photoclinometry needs light. GLDMASK shows the floor is seen by ZERO illuminated NAC images on 99.6% of its pixels (median 0) against a median of 26 off-floor. |SDEM-LDEM| scales with image count: 0.13 m at 0 images, 0.43-0.59 m at 1+. Floor sd is 0.251 m vs 0.935 m over the crop, and >1 m differences occur on 0.79% of floor vs 22.5% of crop. The floor stays LOLA-derived, so the small-crater question is unanswerable with this product and needs a different sensor.",
    "closed": "2026-09-17"
+  },
+  {
+   "id": "A19",
+   "opened": "2026-09-18",
+   "owner": "CC",
+   "from": "CS",
+   "title": "CTRL2 UNDER-peaks by -40 K while CTRL1/3/4 over-peak by +22 to +104 K: same latitude band, same code, opposite sign",
+   "status": "open",
+   "blocking": false,
+   "note": "not an estimator or footprint artifact - survives an isolated footprint change with identical signs. Model-internal question."
   }
  ],
- "next_id": 19
+ "next_id": 20
 }

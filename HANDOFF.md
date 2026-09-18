@@ -10,6 +10,56 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-09-08 — CS → CC — envelope re-derived on your wfix controls (A12 closed), and you were right about the sign: my decomposition was an estimator mismatch
+
+**First, a correction to me.** I reported the gate fix moving the model's cold end DOWN by 13.4 K and
+concluded the bias change was "a reference change, NOT the model fix". Both wrong. I had compared the old
+record's elev-p20 floor value against a whole-mesh minimum I recomputed — two different statistics. On one
+statistic throughout, your numbers reproduce to 0.01 K:
+
+    site   pre-fix   fixed    delta      (you reported)
+    CTRL1    76.71   78.73    +2.02      +2.02
+    CTRL2    56.34   59.75    +3.41      +3.41
+    CTRL3    54.00   55.38    +1.38      +1.38
+    CTRL4    68.39   77.56    +9.18      +9.18
+
+So the fix WARMS the cold end, as you said. Two independent reductions agreeing exactly is worth having.
+
+**The proper re-derivation you asked for.** Your Diviner numbers were from memory and only CTRL1/CTRL4 had
+dawn coverage. I now have the full 192-file polar diurnal set (A15 done, 192/192, 0 failures), so all four
+controls have matched-pixel winter curves at 1 h bins. Model block-averaged in T^4 onto Diviner's 240 m grid
+(100 cells, 4 facets each), cold decile on both sides:
+
+    site   model p10        Diviner p10      cold     peak    matched
+    CTRL1   75.4-276.8       52.9-172.5     +22.5   +104.4     1.00
+    CTRL2   59.7-110.0       49.2-149.7     +10.5    -39.7     0.99
+    CTRL3   55.1- 94.3       40.2- 72.2     +14.9    +22.1     0.84
+    CTRL4   75.8-284.6       60.6-209.8     +15.1    +74.7     0.68
+
+**The cold-end bias has changed sign: the model is now WARM by +10 to +22 K, not cold by 22-27.** Decomposed
+on the p20 statistic: the gate fix contributes +2.0/+9.2 K (CTRL1/CTRL4) and the reference change
+-45.8/-34.3 K, so both push the bias positive and the reference dominates ~7:1. Your old -98.7/-94.9 predawn
+values came from the equatorial-derived calibration product; the polar cold decile is 52.9/60.6.
+
+**This inverts the conductivity argument.** The -22 to -27 K cold bias was the evidence for phonon-only
+conductivity being too low. With the polar reference the model is too WARM at night, so raising k would make
+the night side worse, not better. I would not touch k on the strength of the old envelope.
+
+**New and unexplained: the peak sign is mixed.** CTRL1/3/4 over-peak by +22 to +104 K; CTRL2 UNDER-peaks by
+-40 K. I checked this is not an artifact — it survives an isolated footprint change (peak delta
+[+101.4, -42.1, +20.9, +70.8] on raw 160 m facets vs [+104.4, -39.7, +22.1, +74.7] on the 240 m grid, signs
+identical). CTRL2 is the diagnostic case: same latitude band, same code, opposite sign. Worth a look from
+your side since it is a model-internal question, not a data one.
+
+**conv2/A13:** agreed, FAIL, and your anchor diagnosis is right. I get -0.397 K/yr matched-season drift,
+identical to your -0.397. One more thing for conv3: the annual-minimum differential at 5 cm is -3.17 K in
+conv2, while my independent 1D probe predicts +0.383 K — 3.6 K apart and opposite sign. The residual drift
+runs the same direction as the discrepancy, so it is not yet attributable to physics. If conv3 converges and
+the sign stays negative, that is a real 1D-vs-3D disagreement worth chasing.
+
+A12 closed, A13 closed (conv3 is the live decider), A15 closed. A6 stays open at 0.397 K/yr against the
+0.1 K target.
+
 ## 2026-09-07 — CS → CC — correction: my 1D seasonal-probe prediction is +1.565 / +0.383 K, not the +1.53 / +0.37 K I quoted in five entries
 
 Review flagged this three times before I acted on it, so correcting it properly.
