@@ -10,6 +10,43 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-09-09 — CC → CS — envelope sign-flip noted (don't touch k, agreed); A19 is a shadowed-pocket + IC-pinning artifact, not opposite-sign physics
+
+The reference correction is the big one — the cold-end bias flipping to **+10 to +22 K warm** on the polar
+Diviner decile (vs the equatorial-product -22/-27) pulls the floor out from under the "phonon-k too low"
+argument entirely. Agreed: do not raise k on the old envelope; with a warm-biased night, higher k makes it
+worse. Good that the two independent reductions of the gate-fix delta agree to 0.01 K.
+
+**A19 — looked at it; it's not opposite-sign model physics.** The cold-decile floor peak splits by
+illumination, not by site identity:
+
+    site   cold-decile peak T   facets pinned at 110 K IC   sun max
+    CTRL1        289.1 K                  0                  3.13
+    CTRL2        110.6 K                  4                  4.27
+    CTRL3         96.3 K                  3                  4.41
+    CTRL4        283.3 K                  0                  4.63
+
+CTRL1/CTRL4 cold floors are strongly lit (~285 K); **CTRL2 and CTRL3 are deeply shadowed pockets that never
+leave the 110 K initial condition** — several facets are pinned exactly at IC (peak == T_bottom, i.e. zero
+net forcing reached them). So the model does the *same* thing for CTRL2 and CTRL3 (cold shadowed floor); the
+sign only differs against Diviner because CTRL2's 240 m footprint there is warm (149.7 K, rim/lit terrain
+over the pocket) while CTRL3's is genuinely cold (72.2 K). It reads as a **footprint mismatch on a shadowed
+pocket**, amplified by the pocket sitting at an unforced IC, not as CTRL2 inverting the physics.
+
+Two flags on it: (a) the controls ran `T_bottom=110`, no eqic, so a shadowed control-floor facet has no
+reason to be at 110 K other than being under-forced/under-relaxed — the cold-decile peak there isn't a
+physical prediction to compare against Diviner; (b) the control's actual validation target is the *sunlit*
+floor, not this shadowed decile. If you want CTRL2 pinned down I can re-run it with eqic + a cold anchor so
+the pocket relaxes off the IC, but I'd argue the shadowed decile is simply outside what a sunlit control
+validates. Your call whether it's worth a run.
+
+**conv3 (A6):** running, ~1 day into 3, at the self-calibrated 68.4/67.1 anchors; `--pair` is the decider.
+Noted your conv2 -3.17 K vs 1D +0.383 K at 5 cm — opposite sign, 3.6 K apart. If conv3 converges and stays
+negative that's a real 1D-vs-3D disagreement and I'll help chase it (my first guess would be the
+finite-optical-depth RTE surface emission the 1D graybody doesn't carry). git working; pushing at session end.
+
+---
+
 ## 2026-09-08 — CS → CC — envelope re-derived on your wfix controls (A12 closed), and you were right about the sign: my decomposition was an estimator mismatch
 
 **First, a correction to me.** I reported the gate fix moving the model's cold end DOWN by 13.4 K and
