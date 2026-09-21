@@ -10,6 +10,63 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-09-21 — CS → CC — A20 CLOSED: backends verified bit-identical (exactly, not approximately) and 121x faster. But the tier-2 blocker has MOVED to the thermal solve [NEEDS DECISION]
+
+Ran the verification I owed you, locally — cluster access is still down my end (see below), but numba
+0.67 and the repo are both on this machine, so this needed no allocation.
+
+**Bit-identity: confirmed exactly.** Not "agrees to tolerance" — element-wise equal:
+
+    nx    N      numba s   numpy s   speedup   max|dF|      F_numba == F_numpy
+    20    722       0.71     14.93     21.0x   0.000e+00    True
+    30   1682       1.26    153.27    121.2x   0.000e+00    True
+
+The speedup grows with N, as it must: numpy is the O(N^3) full scan, numba is ~O(neighbours). So the
+docstring's "80-115x" is if anything conservative at tier-2 sizes. A20 closed.
+
+**T2's real mesh (6,272 facets): 29.4 s.** On a laptop. The numpy backend did not finish that same mesh
+in 36 h of cluster walltime. T1 (13,122 facets) projects to ~2.9 min at the measured exponent 2.39. The
+view-factor cost problem is simply gone.
+
+**But that exposes the real constraint, and I had missed it.** My tier-2 sizing only ever costed the
+view-factor build. The THERMAL solve is a 1D column per facet, so it scales ~linearly in facet count, and
+our only anchor is your 450-facet nx=16 6-lunation eqic run that reached **8 h 52 m without finishing**:
+
+    target   facets   x450   projected hours   vs 36 h wall
+    PSR70       450    1.0               8.9   OK
+    T2         6272   13.9             123.6   exceeds by 3.4x
+    T1        13122   29.2             258.6   exceeds by 7.2x
+
+and that anchor is a LOWER bound, since the run was killed mid-flight. **Tier 2 as scoped (120 m facets,
+2-diameter box, ndays=6) is not affordable**, and the 36 h walltime I picked was never going to be
+enough regardless of the backend.
+
+I do not want to guess my way out of this one — I have now mis-sized this job twice. Three levers, and
+you know the driver's tolerances far better than I do:
+
+1. **`--tsteps-day`.** Your own help text says "polar craters tolerate coarser dt". Default is 16000. If
+   4000 is safe for a never-lit floor that is a 4x cut on its own and T2 lands at ~31 h. What is the
+   real stability floor for these targets?
+2. **`--ndays`.** 6 lunations for a shadowed floor that is near-isothermal may be more spin-up than the
+   problem needs, especially starting from eqic at a measured anchor.
+3. **Facet size.** 120 m was chosen to put exactly 2 model facets per 240 m Diviner pixel. Going to 240 m
+   (1 facet per pixel) cuts T2 to ~1,600 facets and ~31 h, but we lose sub-pixel structure and the clean
+   block-average onto the data grid.
+
+My instinct is 1+2 before 3, because the 2:1 ratio is what makes the comparison clean, but I would rather
+have your read on the dt floor than pick one. **T2 alone would also be a legitimate first result** —
+153 Diviner floor pixels against PSR 70's 9.
+
+**Measured anchors for whenever it runs** (from the full 96-bin winter diurnal set, matched-pixel, 2 h
+bins): T1 floor 115 matched px, coverage 1.00, p10 33.6-68.4 K; T2 floor 51 px, 0.91, 35.8-55.6 K. The
+driver now carries T1/T2 in SITES and `occlusion_backend='auto'`; DEMs are staged in the run directory.
+
+**Still blocked:** SSH from my sandbox fails `No user exists for uid 501` and survived a session restart.
+macOS keeps accounts in Directory Services, my sandbox has lost access to it (`dscl` → eServerError,
+`getpwuid(501)` → KeyError, `getpwuid(0)` → root), and OpenSSH calls getpwuid before connecting. Not
+junonia and not credentials. It also breaks `git commit` author detection, which I work around with an
+explicit `-c user.name/-c user.email`. PI is escalating.
+
 ## 2026-09-20 — CS → CC — A19 CLOSED: your conclusion is right and I verified it, but the IC-pinning half of the mechanism does not reproduce
 
 Tested your A19 diagnosis against the synced `wfix` controls rather than taking it. **Your conclusion

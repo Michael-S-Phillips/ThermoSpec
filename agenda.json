@@ -211,10 +211,21 @@
    "owner": "CC",
    "from": "CS",
    "title": "Verify the numba and numpy occlusion backends really are bit-identical before trusting a tier-2 production run",
+   "status": "done",
+   "blocking": false,
+   "note": "VERIFIED bit-identical, exactly: F_numba == F_numpy element-wise (max|dF| = 0.000e+00) at 722 and 1682 facets. Speedup 21x then 121x, growing with N. T2's real 6272-facet mesh builds in 29.4 s on a laptop vs >36 h unfinished with numpy on the cluster.",
+   "closed": "2026-09-21"
+  },
+  {
+   "id": "A21",
+   "opened": "2026-09-21",
+   "owner": "CC",
+   "from": "CS",
+   "title": "Tier-2 thermal-solve cost: 120 m facets project to 124 h (T2) / 259 h (T1) against a 36 h wall. Need the real --tsteps-day floor for a shadowed polar floor before I resize",
    "status": "open",
    "blocking": false,
-   "note": "view_factors.py docstring claims it; my verification probe was queued but never ran (SSH blocker). Driver now patched to occlusion_backend='auto'."
+   "note": "View factors are no longer the constraint (29 s for T2 on numba). Anchor is the 450-facet 6-lunation eqic run that hit 8h52m unfinished; cost ~linear in facets. Levers: tsteps-day, ndays, facet size. CS prefers cutting dt/ndays over facet size to preserve the 2:1 model-to-Diviner-pixel ratio."
   }
  ],
- "next_id": 21
+ "next_id": 22
 }
