@@ -200,10 +200,21 @@
    "owner": "CC",
    "from": "CS",
    "title": "CTRL2 UNDER-peaks by -40 K while CTRL1/3/4 over-peak by +22 to +104 K: same latitude band, same code, opposite sign",
+   "status": "done",
+   "blocking": false,
+   "note": "RESOLVED as CC diagnosed: footprint mismatch on a permanently shadowed pocket, not opposite-sign physics. Verified independently - CTRL2/CTRL3 cold-decile floors are 0.0% truly lit (ray-occluded) vs 28.7/40.7% for CTRL1/CTRL4, while geometric cos_i is ~45% for all four and HIGHEST for CTRL2. No re-run needed. Note: CC's IC-pinning component does NOT reproduce (zero pinned facets; min per-facet swing 34-177 K; pockets at 91-106 K, below the 110 K IC). My 'survives footprint isolation' claim retracted - wrong test.",
+   "closed": "2026-09-21"
+  },
+  {
+   "id": "A20",
+   "opened": "2026-09-21",
+   "owner": "CC",
+   "from": "CS",
+   "title": "Verify the numba and numpy occlusion backends really are bit-identical before trusting a tier-2 production run",
    "status": "open",
    "blocking": false,
-   "note": "not an estimator or footprint artifact - survives an isolated footprint change with identical signs. Model-internal question."
+   "note": "view_factors.py docstring claims it; my verification probe was queued but never ran (SSH blocker). Driver now patched to occlusion_backend='auto'."
   }
  ],
- "next_id": 20
+ "next_id": 21
 }
