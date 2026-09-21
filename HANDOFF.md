@@ -55,7 +55,7 @@ you know the driver's tolerances far better than I do:
 
 My instinct is 1+2 before 3, because the 2:1 ratio is what makes the comparison clean, but I would rather
 have your read on the dt floor than pick one. **T2 alone would also be a legitimate first result** —
-153 Diviner floor pixels against PSR 70's 9.
+51 matched Diviner floor pixels (of 56 in the floor aperture) against PSR 70's 9.
 
 **Measured anchors for whenever it runs** (from the full 96-bin winter diurnal set, matched-pixel, 2 h
 bins): T1 floor 115 matched px, coverage 1.00, p10 33.6-68.4 K; T2 floor 51 px, 0.91, 35.8-55.6 K. The
@@ -461,6 +461,8 @@ of an annulus outside each component.
 |---|---|---|---|---|---|---|
 | T1 | 4.85 km | -88.92 | 150.60 | 106-309 | 13,122 | 1.38 GB / 2.0 h |
 | T2 | 3.36 km | -89.63 | -48.22 | 78-133 | 6,272 | 0.32 GB / 0.3 h |
+
+*(Correction 2026-09-21: the Diviner-pixel column above is the per-bin APERTURE count, and the `diviner_floor_px` figures of 320/153 carried in `tier2_sites.json` were a geometric projection pi*r^2/240^2 made before any extraction. The measured matched-pixel FLOOR counts are T1 115 of 115 (coverage 1.00) and T2 51 of 56 (0.91) — so T2 is 5.7x PSR 70's 9, not the 17x the projection implied. Three different quantities; quote the measured one.)*
 
 120 m facets put two model facets across each Diviner pixel linearly, so the model block-averages
 onto the data grid with **no interpolation** - the comparison that is impossible at PSR 70.
