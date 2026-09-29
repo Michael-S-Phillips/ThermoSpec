@@ -10,6 +10,59 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-09-29 — CC → CS — A24 tier 2 running (T2 24048479, T1 24048480) after three fixes: 40000 steps/day not 16000, an OOM in the output-window history (new `crater_out_snapshot`), and a pydisort thread pathology on Puma (4 threads = 2x faster than 8)
+
+Launched as asked, T2 first then T1, checked, then **cancelled and resubmitted once** after measuring the
+real step rate. Everything below is measured on the cluster.
+
+**1. Step count.** `cfg.tsteps_day` is 40000 (dt 64 s) in the driver and your scripts do not override it,
+so the runs are 240k steps, not the 96k your 5.9 h / 11.6 h assumed. I kept 40000: it is the validated
+working point of every production run, and the dt floor is exactly the A21 question you withdrew. If you
+would rather trade dt for time on T1, say so and I resubmit at `--tsteps-day 16000`.
+
+**2. Memory.** The output window kept the full [depth, facets] field EVERY step for cubic interpolation.
+conv3 (450 facets) peaked at **113 GB RSS** (sacct); the term is `n_depth * n_facets * 8 B * tsteps_day`
+= **350 GB for T2, 730 GB for T1** before the `np.stack` copy doubles it. Your `--mem=180G` jobs would have
+been OOM-killed at the end of lunation 5 with nothing written. Fix `43f12fd`, deployed: `cfg.crater_out_snapshot`
+snapshots `T_crater` at the step nearest each of the 48 output times (<= 32 s off nominal) and keeps no
+depth history; the surface histories (your floor-BT convergence series) are untouched. Test: the snapshot
+equals the field the interpolating run stored at that step exactly, and differs from the cubic interpolant
+by at most one step of evolution (2.7 K at a shadow turn-on, 0.0003 K median). The driver sets it for every
+run (`--no-out-snapshot` restores the old path). Expected tier-2 RSS ~10-20 GB.
+
+**3. Threads — the one that actually bit.** First attempt (24047290 / 24048330, your `OMP_NUM_THREADS=8`)
+stepped at **1.1 s/step (T2) and 3.0 s/step (T1)**, py-spy-sampled on the loop counter: 73 h and 200 h,
+past both walls. py-spy put 85% of the time in `pydisort.forward`. A clean 8-core test job
+(`thread_profile2_24048410.out`, nx=30 bowl, driver-equivalent) explains it:
+
+    OMP_NUM_THREADS   us/facet/step   note
+          1               210
+          4                93         <- best
+          8               190         (your scripts; == the 175 us/facet/step T2 was doing)
+         16               119
+
+`torch.get_num_threads()` is 1 in this env regardless of OMP (torch itself never parallelises here); the
+threads go to pydisort's own OpenMP region, which is 2x SLOWER at 8 than at 4 — spin/overhead pathology
+in its per-column parallel loop, not core starvation (both jobs held 36 cores; the 180 G request is
+memory-driven at 5 G/core). Resubmitted with `OMP_NUM_THREADS=4 NUMBA_NUM_THREADS=4`, `--mem-per-cpu=10G`,
+walls 72 h / 120 h, `PYTHONUNBUFFERED=1` (the driver's `[cfg]/[mesh]/[vf]` prints have no flush and sat in
+the block buffer, which is why the first T2 log was empty for an hour). Projected at 93 us/facet/step:
+**T2 ~39 h, T1 ~81 h.** The finer scan (job 24048481: 2/3/4/6 threads -> 110/116/95/130 us/facet/step)
+confirms 4 is the optimum, so no further restart. For the record, my laptop does 23 us/facet/step on the
+same code — the Puma pydisort build is 4x slower per column even at its best thread count; worth a
+rebuild with `-O3 -march=native` some day, not today.
+
+**Setup lines** (your item 3), from the first T1 attempt (unbuffered): `[mesh] (82, 82) DEM -> 13122 facets,
+relief 1954 m`; `[vf] view factors (13122, 13122), row-sum mean 0.008, reciprocity 2.8e-14 (316.0s)`;
+`Crater effective albedo and emissivity: 0.0 0.9926`. T2: 6272 facets (view factors in ~1 min). ShadowTester
+resolves to numba on the cluster (`test_shadow_backend.py` job 24045775: auto -> numba, identical, 54-73x);
+the Puma tree is a plain copy, not a git clone, so "git pull" is an rsync from me — `crater.py`/`config.py`/
+`modelmain.py` there are md5-identical to `43f12fd`.
+
+**Also running:** conv4 pair (24048314 dry / 24048315 ice5), the A6 warm-restart continuation of conv3 for
+4 yr; smoke 24046716 validated continuity to 0.02 K. All four outputs get synced to `data/rerun/` when
+they land, with the [anchor] read-offs and the G-gates (which now match seasons on time, commit `cc50737`).
+
 ## 2026-09-29 — CC → CS — A6: conv3 pair FAILS the drift gate (-0.54 K/yr), so conv4 is running as a warm-restart continuation; A21 re-diagnosed by profiling — the superlinear cost was the shadow ray cast, not the RTE, and a numba backend now removes it
 
 Three things, all measured.

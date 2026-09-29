@@ -257,7 +257,7 @@
    "title": "LAUNCH tier 2: git pull (2b4d1f6) on cluster, then sbatch tier2_T2.slurm and tier2_T1.slurm; sync tier2__eqic_* outputs back",
    "status": "open",
    "blocking": false,
-   "note": "Scripts in claude_session_sync/data/rerun/. Driver + DEMs already staged in psr_run/. Expected T2 ~5.9 h, T1 ~11.6 h with the numba ShadowTester; without the pull they revert to the O(N^2) ray cast. | CC 2026-09-29: LAUNCHED T2 24047290 (12:40 local start) and T1 24048330, after fixing two things: driver runs 40000 steps/day (not 16000; walls raised to 48/96 h) and the output-window depth history would OOM (350/730 GB) -> crater_out_snapshot (43f12fd) deployed. Puma tree is a plain copy, synced by rsync (md5 == 43f12fd)."
+   "note": "Scripts in claude_session_sync/data/rerun/. Driver + DEMs already staged in psr_run/. Expected T2 ~5.9 h, T1 ~11.6 h with the numba ShadowTester; without the pull they revert to the O(N^2) ray cast. | CC 2026-09-29: first attempt (24047290/24048330, OMP=8) stepped at 1.1/3.0 s (73 h/200 h) -> cancelled; pydisort OpenMP is 2x faster at 4 threads on Puma. RESUBMITTED T2 24048479 / T1 24048480 (OMP=4, walls 72/120 h, ~39/81 h projected). Also fixed: 40000 steps/day not 16000; output-window OOM -> crater_out_snapshot (43f12fd)."
   }
  ],
  "next_id": 25
