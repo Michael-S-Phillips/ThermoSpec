@@ -140,6 +140,17 @@ class Simulator:
 			self.T_surf_crater_history = []
 			self.F_crater_obs_history = []  # [n_facets] at each step
 			self.T_crater_out = np.zeros((self.grid.x_num,n_facets, n_out))  # surface temp for each facet at each output time
+			# crater_out_snapshot: instead of keeping the full [depth, facets] field EVERY step of the output
+			# window for cubic interpolation (memory = n_depth*n_facets*8 B*tsteps_day, e.g. 350 GB at 6272
+			# facets / 40000 steps), snapshot T_crater directly at the step nearest each output time
+			# (<= dt/2 = 32 s of evolution off the nominal time; exact at shadow transitions rather than
+			# overshooting). Surface histories are unaffected (still every kept step).
+			self._crater_snapshot_mode = bool(getattr(self.cfg, 'crater_out_snapshot', False)) and bool(self.cfg.diurnal)
+			self._crater_snap_steps = {}
+			if self._crater_snapshot_mode:
+				dt_grid = self.t[1] - self.t[0]
+				for k, tk in enumerate(self.t_out):
+					self._crater_snap_steps.setdefault(int(round(tk / dt_grid)), []).append(k)
 			self.T_surf_crater_out = np.zeros((n_facets,n_out))
 			self.F_crater_obs_out = np.zeros((n_facets, n_out))  # observed flux for each facet at each output time
 			self.n_facets = n_facets
@@ -840,6 +851,7 @@ class Simulator:
 			# Crater histories
 			if self.cfg.crater and len(self.T_crater_history) > 0:
 				T_crater_hist = np.stack(self.T_crater_history, axis=2)  # [depth, facets, time]
+			if self.cfg.crater and len(self.T_surf_crater_history) > 0:
 				T_surf_crater_hist = np.stack(self.T_surf_crater_history, axis=1)  # [facets, time]
 			# Ensure output times are within the simulation time range with a small buffer
 			t_min = t_hist[0]
@@ -882,7 +894,9 @@ class Simulator:
 							interp_func = interp1d(t_hist, T_crater_hist[d, i, :], kind='cubic',
 												   bounds_error=True, assume_sorted=True)
 							self.T_crater_out[d, i, :] = interp_func(t_out_clipped)
-					# Surface temperature for each facet
+				if self.cfg.crater and len(self.T_surf_crater_history) > 0:
+					# Surface temperature for each facet (also in snapshot mode, where T_crater_out is filled in run())
+					n_facets, n_out = T_surf_crater_hist.shape[0], len(self.t_out)
 					self.T_surf_crater_out = np.zeros((n_facets, n_out))
 					for i in range(n_facets):
 						interp_func = interp1d(t_hist, T_surf_crater_hist[i, :], kind='cubic',
@@ -1166,8 +1180,12 @@ class Simulator:
 						#Non-RTE model, calculate upwards thermal emission for self-heating in next time step. 
 						self.flux_therm_crater = self.crater_emissivity*self.cfg.sigma*self.T_surf_crater**4.
 				if self._keep_history:
-					self.T_crater_history.append(self.T_crater.copy())
+					if not self._crater_snapshot_mode:
+						self.T_crater_history.append(self.T_crater.copy())
 					self.T_surf_crater_history.append(self.T_surf_crater.copy())
+				if self._crater_snapshot_mode and j in self._crater_snap_steps:
+					for k in self._crater_snap_steps[j]:
+						self.T_crater_out[:, :, k] = self.T_crater
 
 
 			# Terminate here for fixed temperature run, saving outputs at initialization temperature. Useful for spectroscopy. 
