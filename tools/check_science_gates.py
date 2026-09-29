@@ -149,21 +149,39 @@ def _per_lunation_means(d):
             means[L] = float(fs.mean())
     return means, tag
 
+YEAR_S = 365.25 * 86400.0
+P_LUN = 2551443.0
+
+def _annual_drifts(means):
+    """Matched-SEASON drift per lunation, matched on TIME (CS 2026-09-29): compare lunation L (centre time
+    t_L) with the series interpolated at t_L + 1 yr. The old L vs L+12 pairing is 12*P = 0.970 yr, an
+    11-day seasonal phase error that reads a seasonally modulated series as spurious drift (conv3 pair:
+    -0.540 K/yr by L+12 vs -0.325 matched on time). Returns [] if the run spans < 1 yr + 1 lunation."""
+    Ls = np.array(sorted(means)); v = np.array([means[L] for L in Ls])
+    tc = (Ls + 0.5) * P_LUN
+    out = []
+    for L, t0, v0 in zip(Ls, tc, v):
+        t1 = t0 + YEAR_S
+        if t1 > tc[-1]:
+            break
+        out.append(float(np.interp(t1, tc, v)) - float(v0))
+    return out
+
 def gate_pair_drift(d_dry, d_ice):
     """PAIRED matched-season convergence (CS 2026-09-03): the A1 decider. G5 gates each run separately, but
     two runs can both pass while their DIFFERENCE still drifts (opposite-sign drifts). Compute the ice-dry
-    per-lunation floor-mean difference and test its matched-season (L vs L+12) drift; fail if >0.1 K/yr."""
+    per-lunation floor-mean difference and test its matched-season (t vs t+1 yr) drift; fail if >0.1 K/yr."""
     md_dry, tag = _per_lunation_means(d_dry)
     md_ice, _ = _per_lunation_means(d_ice)
     if md_dry is None or md_ice is None:
         return None, "need two convergence npz with floor history"
     diff = {L: md_ice[L] - md_dry[L] for L in md_dry if L in md_ice}
-    drifts = [diff[L + 12] - diff[L] for L in sorted(diff) if (L + 12) in diff]
+    drifts = _annual_drifts(diff)
     if not drifts:
-        return None, f"run too short for matched-season differential drift (<2 yr; {len(diff)} shared lunations)"
+        return None, f"run too short for matched-season differential drift (<1 yr + 1 lunation; {len(diff)} shared lunations)"
     md = float(np.mean(drifts))
     last = diff[max(diff)]
-    return abs(md) < 0.1, (f"differential (ice-dry) matched-season drift {md:+.3f} K/yr over {len(drifts)} pairs "
+    return abs(md) < 0.1, (f"differential (ice-dry) matched-season drift {md:+.3f} K/yr over {len(drifts)} time-matched pairs "
                            f"(need |drift|<0.1); last-lunation ice-dry {last:+.3f} K; {tag} floor")
 
 def gate_drift(d):
@@ -175,11 +193,11 @@ def gate_drift(d):
     means, tag = _per_lunation_means(d)
     if means is None:
         return None, "no crater history/floor mask (not a convergence file)"
-    drifts = [means[L + 12] - means[L] for L in sorted(means) if (L + 12) in means]
+    drifts = _annual_drifts(means)
     if not drifts:
-        return None, f"run too short for matched-season drift (<2 yr; {len(means)} lunations)"
+        return None, f"run too short for matched-season drift (<1 yr + 1 lunation; {len(means)} lunations)"
     md = float(np.mean(drifts))
-    return abs(md) < 0.1, (f"matched-season (L vs L+12) drift {md:+.3f} K/yr over {len(drifts)} pairs "
+    return abs(md) < 0.1, (f"matched-season (t vs t+1 yr) drift {md:+.3f} K/yr over {len(drifts)} pairs "
                            f"(need |drift|<0.1); {tag} floor")
 
 def main():
