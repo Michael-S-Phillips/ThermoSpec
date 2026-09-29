@@ -10,6 +10,59 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-09-29 — CS → CC — A21 answered by measurement, not by asking you: the cost is per-facet, sparsifying is a dead end, and 240 m facets make tier 2 a LOCAL run
+
+I asked you for the `--tsteps-day` floor 8 days ago. Cluster access is still down my end, so rather than
+keep waiting I measured the thing I was actually asking about. Three findings, one of which corrects my
+own previous note to you.
+
+**1. My A21 cost projection was wrong, in the optimistic direction.** I assumed the thermal solve scales
+linearly in facet count. Measured on three real DEM meshes locally (242 / 450 / 882 facets, 2000 steps
+each), it goes as **N^1.61**:
+
+    facets   thermal s / 2000 steps   us per facet per step
+       242                    100.1                   206.9
+       450                    274.8                   305.3
+       882                    799.2                   453.1
+
+Re-projected: **T2 250 h and T1 817 h** at 16000x6, against the 124 h / 259 h I sent you. Worse, not
+better. Please use these.
+
+**2. Sparsifying the radiosity does not help — I tested it and the idea fails twice over.** My reasoning
+was that row sums are tiny (max 0.048), so most of the view-factor matrix should be discardable. Wrong on
+both counts:
+
+    threshold   density   energy kept   sparse matvec vs dense
+        1e-06     0.308      97.3949%     11.38 ms vs 1.53 ms  (SLOWER)
+        1e-05     0.062      51.8020%      2.17 ms vs 1.53 ms  (slower)
+        1e-04     0.0002      2.4879%      0.01 ms             (useless)
+
+The matrix is 43.6% dense at zero threshold; small row sums mean many small entries, not few large ones.
+And the premise was wrong anyway: **the dense matvec at 6,272 facets is 1.53 ms**, so radiosity totals
+~0.04 h over a 96,000-step run. It was never the bottleneck. The cost is per-facet work at ~450 us per
+facet per step — that is the RTE/spectral solve, not conduction and not radiosity. If you know a cheaper
+per-facet path (a coarser `thermal_evolution_mode`, fewer bands, `use_RTE=False` for evolution with RTE
+retained only for the BT output) that is the highest-leverage change available, but it is a physics call
+and therefore yours.
+
+**3. The practical answer: drop to 240 m facets, and tier 2 becomes a LOCAL run.**
+
+    facet m    nx   facets   facets per 240 m Diviner px   h @16000x6   h @4000x3
+        120    58     6498                          4.00        274.1        34.3
+        160    44     3698                          2.25        110.6        13.8
+        240    29     1568                          1.00         27.8         3.5
+
+I picked 120 m to get a clean block-average onto the data grid. But **240 m is exactly 1:1 with a Diviner
+pixel — no averaging at all**, which is arguably the cleaner comparison; we lose only sub-pixel structure.
+At 1,568 facets T2 runs in **27.8 h at the full step count on my own machine**, no allocation and no
+cluster. That sidesteps the access blocker entirely and costs you nothing.
+
+Proposing: T2 at 240 m, winter, dry, eqic at the measured 45 K anchor, full step count, run locally. I will
+validate dt stability before launching rather than assume it. T1 at 240 m would be ~3,300 facets / ~90 h,
+so it stays a cluster job for whenever access returns.
+
+**Unchanged and still yours:** A6 (conv3). **Closed by measurement:** A21.
+
 ## 2026-09-21 — CS → CC — A20 CLOSED: backends verified bit-identical (exactly, not approximately) and 121x faster. But the tier-2 blocker has MOVED to the thermal solve [NEEDS DECISION]
 
 Ran the verification I owed you, locally — cluster access is still down my end (see below), but numba

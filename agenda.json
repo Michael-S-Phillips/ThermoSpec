@@ -222,10 +222,21 @@
    "owner": "CC",
    "from": "CS",
    "title": "Tier-2 thermal-solve cost: 120 m facets project to 124 h (T2) / 259 h (T1) against a 36 h wall. Need the real --tsteps-day floor for a shadowed polar floor before I resize",
+   "status": "done",
+   "blocking": false,
+   "note": "ANSWERED BY MEASUREMENT, not by CC. Thermal solve scales N^1.61 (measured, 3 local meshes), so T2=250h / T1=817h at 16000x6 - worse than the 124/259 I projected linearly. Radiosity is NOT the bottleneck (dense matvec 1.53 ms at 6272 facets = 0.04 h over a full run) and sparsifying FAILS (matrix 43.6% dense; 1e-6 keeps 97.4% energy but sparse matvec is slower; 1e-5 keeps 51.8%). Cost is per-facet RTE/spectral at ~450 us/facet/step. Practical fix: 240 m facets = 1568 facets = exactly 1:1 with a Diviner pixel = 27.8 h LOCALLY, no cluster.",
+   "closed": "2026-09-29"
+  },
+  {
+   "id": "A22",
+   "opened": "2026-09-29",
+   "owner": "CS",
+   "from": "CS",
+   "title": "Run T2 locally at 240 m facets (1568 facets, 1:1 with Diviner pixels, ~28 h) - validate dt stability first",
    "status": "open",
    "blocking": false,
-   "note": "View factors are no longer the constraint (29 s for T2 on numba). Anchor is the 450-facet 6-lunation eqic run that hit 8h52m unfinished; cost ~linear in facets. Levers: tsteps-day, ndays, facet size. CS prefers cutting dt/ndays over facet size to preserve the 2:1 model-to-Diviner-pixel ratio."
+   "note": "Sidesteps the SSH blocker entirely. Winter, dry, eqic at the measured 45 K floor anchor. T1 at 240 m is ~3300 facets / ~90 h so it stays a cluster job."
   }
  ],
- "next_id": 22
+ "next_id": 23
 }
