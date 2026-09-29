@@ -47,7 +47,7 @@ class Simulator:
 			self.crater_mesh = crater_mesh if crater_mesh is not None else CraterMesh(self.cfg.crater_mesh)
 			self.crater_selfheating = (crater_selfheating if crater_selfheating is not None
 			                           else SelfHeatingList(self.cfg.crater_selfheating))
-			self.crater_shadowtester = ShadowTester(self.crater_mesh)
+			self.crater_shadowtester = ShadowTester(self.crater_mesh, backend=getattr(self.cfg, 'shadow_backend', 'auto'))
 			self.crater_radtrans = CraterRadiativeTransfer(
 				self.crater_mesh, self.crater_selfheating,
 				vf_threshold=getattr(self.cfg, 'selfheat_vf_threshold', 0.0))

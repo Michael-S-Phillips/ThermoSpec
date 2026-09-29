@@ -59,6 +59,7 @@ class SimulationConfig:
     #Surface roughness options. 
     crater: bool = False            #Run hemispherical crater approximation alongside smooth model. Much slower! 
     illum_freq: int = 1            #Frequency at which to recompute rays for crater illumination/shadowing. I.e., every N time steps.     
+    shadow_backend: str = 'auto'   # ShadowTester ray-cast backend: 'numpy' (dependency-free, O(N_rays*N_tris) -- the superlinear per-step term on >~1e3-facet terrain meshes), 'numba' (same test compiled+threaded, agrees with numpy; needs numba), 'auto' (numba if importable else numpy). Independent of view_factors' occlusion_backend.
     compute_crater_radiance: bool = False  # Calculate crater radiance as seen by observers. Computationally expensive!
     #observer_vectors: list = field(default_factory=lambda: [[0, 0, 1],[0.5,0,1],[0.7,0,1], [-0.5,0,1], [-0.7,0,1]])  # List of [x,y,z] observer direction vectors (default: overhead)
     observer_vectors: list = field(default_factory=lambda: [[0, 0, 1],[1,0,1],[0,1,1]])

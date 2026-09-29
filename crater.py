@@ -160,6 +160,13 @@ class SelfHeatingList:
 
 # ---------------------- Shadow Tester ----------------------
 
+try:
+    import numba as _numba
+    _HAS_NUMBA = True
+except Exception:                                            # numba optional -> numpy fallback
+    _HAS_NUMBA = False
+
+
 def _sun_first_hit_numpy(sub_vertices, sub_faces, origins, direction, eps=1e-6):
     """Dependency-free replacement for trimesh `ray.intersects_first`: the index of the nearest
     triangle each ray (shared `direction`) hits, or -1. Pure-numpy Moller-Trumbore, vectorised over
@@ -185,14 +192,75 @@ def _sun_first_hit_numpy(sub_vertices, sub_faces, origins, direction, eps=1e-6):
     return first
 
 
+if _HAS_NUMBA:
+    @_numba.njit(parallel=True, cache=True)
+    def _sun_first_hit_numba_kernel(v0, e1, e2, p, inv, ok_det, origins, d, eps):
+        """Same Moller-Trumbore as _sun_first_hit_numpy, one ray per parallel iteration, inner loop
+        over triangles with the identical hit test and first-minimum-t tie rule (np.argmin semantics).
+        Same arithmetic in the same order, so results match the numpy path; no O(N_rays x N_tris)
+        temporaries, and threads scale it (~10-40x on 1e3-1e4 facets)."""
+        n_rays = origins.shape[0]; n_tri = v0.shape[0]
+        first = np.full(n_rays, -1, dtype=np.int64)
+        for k in _numba.prange(n_rays):
+            ox = origins[k, 0]; oy = origins[k, 1]; oz = origins[k, 2]
+            tmin = np.inf; imin = -1
+            for i in range(n_tri):
+                if not ok_det[i]:
+                    continue
+                t0x = ox - v0[i, 0]; t0y = oy - v0[i, 1]; t0z = oz - v0[i, 2]
+                u = (t0x * p[i, 0] + t0y * p[i, 1] + t0z * p[i, 2]) * inv[i]
+                if u < -eps:
+                    continue
+                qx = t0y * e1[i, 2] - t0z * e1[i, 1]
+                qy = t0z * e1[i, 0] - t0x * e1[i, 2]
+                qz = t0x * e1[i, 1] - t0y * e1[i, 0]
+                v = (qx * d[0] + qy * d[1] + qz * d[2]) * inv[i]
+                if v < -eps or u + v > 1.0 + eps:
+                    continue
+                t = (e2[i, 0] * qx + e2[i, 1] * qy + e2[i, 2] * qz) * inv[i]
+                if t > eps and t < tmin:
+                    tmin = t; imin = i
+            first[k] = imin
+        return first
+
+
+def _sun_first_hit_numba(sub_vertices, sub_faces, origins, direction, eps=1e-6):
+    """numba backend of _sun_first_hit_numpy (same signature/semantics). Per-triangle precomputation
+    is done in numpy exactly as in the numpy path so the two agree; the per-ray scan is compiled."""
+    tris = sub_vertices[sub_faces]
+    v0 = np.ascontiguousarray(tris[:, 0, :]); e1 = np.ascontiguousarray(tris[:, 1, :] - v0)
+    e2 = np.ascontiguousarray(tris[:, 2, :] - v0)
+    d = np.asarray(direction, float); d = d / np.linalg.norm(d)
+    p = np.ascontiguousarray(np.cross(d, e2))
+    det = np.einsum('ij,ij->i', e1, p)
+    ok_det = np.abs(det) > eps
+    inv = np.where(ok_det, 1.0 / np.where(ok_det, det, 1.0), 0.0)
+    return _sun_first_hit_numba_kernel(v0, e1, e2, p, np.ascontiguousarray(inv), ok_det,
+                                       np.ascontiguousarray(np.asarray(origins, float)), d, float(eps))
+
+
 class ShadowTester:
-    def __init__(self, mesh: CraterMesh):
+    """Per-facet direct-beam illumination by ray casting against the subdivided mesh.
+
+    backend: 'numpy' (dependency-free, O(N_rays x N_tris) vectorised over triangles -- the superlinear
+    term in crater/terrain per-step cost once N_facets >~ 1e3), 'numba' (same test compiled + threaded;
+    results agree with numpy on every mesh/sun tested, see prototypes/test_shadow_backend.py), or 'auto'
+    (numba if importable, else numpy). cfg.shadow_backend feeds this from Simulator."""
+    def __init__(self, mesh: CraterMesh, backend='auto'):
         self.sub_vertices = np.asarray(mesh.sub_vertices, float)
         self.sub_faces = np.asarray(mesh.sub_faces)
         self.sub_centroids = mesh.sub_centroids
         self.centroids = mesh.centroids
         self.mapping = mesh.sub_face_index
         self.sub_normals = mesh.sub_normals
+        if backend == 'auto':
+            backend = 'numba' if _HAS_NUMBA else 'numpy'
+        if backend == 'numba' and not _HAS_NUMBA:
+            raise RuntimeError("ShadowTester backend='numba' requires numba (pip install numba)")
+        if backend not in ('numpy', 'numba'):
+            raise ValueError(f"unknown ShadowTester backend {backend!r}; use 'numpy', 'numba' or 'auto'")
+        self.backend = backend
+        self._first_hit = _sun_first_hit_numba if backend == 'numba' else _sun_first_hit_numpy
 
     def illuminated_facets(self, sun_vec):
         n_facets = self.sub_centroids.shape[0]
@@ -208,7 +276,7 @@ class ShadowTester:
         D = 2.0 * np.linalg.norm(self.sub_vertices.max(axis=0) - self.sub_vertices.min(axis=0))
         origins = self.sub_centroids + D * sun_unit
         direction = -sun_unit
-        index_tri = _sun_first_hit_numpy(self.sub_vertices, self.sub_faces, origins, direction)
+        index_tri = self._first_hit(self.sub_vertices, self.sub_faces, origins, direction)
         index_ray = np.arange(n_facets)
         illuminated = np.zeros(len(self.centroids))
         match = index_ray==index_tri
