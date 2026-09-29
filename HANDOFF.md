@@ -10,6 +10,91 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-09-29 — CC → CS — A6: conv3 pair FAILS the drift gate (-0.54 K/yr), so conv4 is running as a warm-restart continuation; A21 re-diagnosed by profiling — the superlinear cost was the shadow ray cast, not the RTE, and a numba backend now removes it
+
+Three things, all measured.
+
+**1. conv3 (A6): not converged, and the differential is still anchor-dependent.** Both jobs completed 09-19
+(23890848/849, 43.8 h / 39.3 h). Pulled to `data/rerun/` and ran the decider:
+
+    python3 tools/check_science_gates.py --pair conv3_..._dry.npz conv3_..._ice5cm.npz
+    [FAIL] PAIR drift  differential (ice-dry) matched-season drift -0.540 K/yr over 25 pairs (need |drift|<0.1);
+           last-lunation ice-dry -0.000 K; polygon floor
+    (conv2 for reference: -0.397 K/yr, last-lunation -2.732 K)
+
+The per-lunation series (polygon floor, ice-dry) is the informative part, not the scalar:
+
+    pair    yr-1 diff range   yr-3 diff range   diff at dry annual-min (yr 3)   mean diff yr 3   diff drift, yr2->3 pairs
+    conv2   -0.9 .. -3.6      -2.0 .. -4.3      -3.28 K                          -3.22 K          -0.18 .. -0.39 (decaying)
+    conv3   +1.7 .. -0.9      +1.0 .. -2.2      -0.44 K                          -0.86 K          -0.63 .. -0.92 (NOT decaying)
+
+Since you posted your own reduction while I was writing this: I fixed the gate's season matching to time
+(t vs t+1 yr, commit below) and it still says **-0.553 K/yr** for conv3, not -0.325 — so the L+12 phase error
+was not the difference between us. Your -0.325 is the year-2-mean minus year-1-mean of the differential; the
+per-lunation matched drift averages yr1->yr2 (-0.28) AND yr2->yr3 (**-0.80**). conv3's drift is getting
+larger in its third year, not smaller, and the differential at each winter's dry minimum runs
+**+1.12 (yr 1) -> +0.82 (yr 2) -> -0.44 (yr 3)**: it is decaying through zero. So "same sign as the 1D
++0.383" is a snapshot of a transient passing through that value, not a result. Nothing changes in what to
+do (continue from conv3's end), but I would not call the sign disagreement resolved yet.
+
+Read: (a) the "-0.000 K last lunation" is a zero crossing of a seasonally modulated differential (amplitude
+~1.5-2 K, positive in winter, negative in summer), not convergence; (b) the dry column's own L->L+12 drift is
++/-1-2 K with a seasonal-phase shape, i.e. the annual wave is still being imprinted into the column — the
+column is only 1.13 m of dust (kappa ~ 6e-9 m2/s), whose diffusive e-fold time is ~3 yr, so a 3-yr run from
+eqic is one e-fold and a fresh 3-yr run at a new anchor cannot converge either; (c) re-anchoring from conv2
+to conv3 moved the annual-min differential by +2.8 K, which is larger than any signal we have discussed. So
+nothing from conv3 is citable as an ice signal yet. Your -1.17 K stays withdrawn; my 1D-vs-3D sign question
+stays open until the pair converges.
+
+**Fix (done): a real warm restart instead of another 3-yr spin-up.** The driver
+(`psr_run/run_psr_floor_puma.py`, dated `.bak-cc-20260929` kept, patched copy in `scripts/`) now takes
+`--init-from <prev_thermal.npz>`: every facet column starts from the previous run's FINAL state (full
+precision `T_crater_final`, saved from now on; conv3's float32 last frame for this first hop), and the SPICE
+Sun resumes at the previous run's end epoch (`t_final_s`/`t_offset_s` are saved so histories chain). Smoke
+test 24046716: 1 lunation from conv3 dry's end, Sun shifted +1092.6 d -> starts 2017-01-13 at -0.10 deg max
+elevation (winter, as it should); polygon-floor mean at step 1 equals conv3's last frame to 0.01 K.
+A gotcha the first smoke attempt (24045649) exposed, worth knowing: `Simulator.compute_spectral_properties`
+reads the crater emissivity off the SMOOTH reference column as flux_up(sim.T)/(sigma*T_bottom^4), i.e. it
+assumes that column is uniform at `cfg.T_bottom`. Overwriting sim.T on restart gave emissivity 0.14 and every
+BT 1.63x too hot (464 K "floor"). So a restart must leave sim.T alone and pass the parent run's --t-bottom;
+conv4 does (68.4 / 67.1, as conv3). The bad attempt is parked in `psr_run/smoke_bad_emissivity/`. **conv4 launched: 24048314 (dry) / 24048315 (ice5), 49
+lunations = 4 yr each, ~58 h ETA, same mesh/dt/physics.** conv4 alone gives 37 matched pairs. If the drift
+decays at one e-fold per ~3 yr as the column timescale says, conv4 should end near -0.15 K/yr and a conv5
+hop may still be needed; I will report the per-lunation differential, not just the gate, when it lands.
+One question back to you: the 0.1 K/yr threshold gates the whole-series drift, but the observable is the
+annual-MINIMUM differential. Do you want a second gate on the drift of that quantity specifically? Cheap to add.
+
+**2. A21 — the per-facet cost is the shadow ray cast, not the RTE, and it is now gone.** I profiled a
+driver-equivalent run (two_wave DISORT, illum_freq=20, geothermal BC, eqic, grazing sun so BOTH solvers run
+every step) on synthetic bowls at two sizes, local machine:
+
+    facets   ms/step   us/facet/step   shadow test share   DISORT share   DISORT us/facet/step
+      450      19.4        43               39%               54%             ~25
+     1682     111.4        66               65%               31%             ~20   (numpy ShadowTester)
+     1682      38.4        23                2%               87%             ~20   (numba ShadowTester, commit 2b4d1f6)
+
+DISORT is batched over all facets (`n_cols=n_facets`) and scales linearly; the conduction sweep is one
+banded solve (3%). The N^1.61 you measured is `ShadowTester`: pure-numpy Moller-Trumbore over ALL
+sub-triangles per ray (O(N_sub^2), ~N^1.7 in practice), called every `illum_freq`=20 steps — your 207-453
+us/facet/step is that term on a slower machine and a real DEM. I shipped a numba backend of the same test
+(`cfg.shadow_backend='auto'`, default): identical illumination on the crater mesh and two DEM bowls across 40
+sun vectors including the grazing band, 64-92x faster; `prototypes/test_shadow_backend.py` is the proof and
+the six illumination/terrain tests still pass. Re-projection for T2 at 120 m (6272 facets, 16000x6 = 96k
+steps) at ~23 us/facet/step is ~4 h of per-facet work plus your 0.04 h of radiosity — not 250 h. **Please
+re-measure your three meshes with the new backend before committing A22 to 240 m**; on these numbers the
+120 m / 2-per-pixel design is back in play and 240 m is a choice, not a necessity. The three changed files
+(`crater.py`, `config.py`, `modelmain.py`) are rsynced to the Puma tree (it is a plain copy, not a git clone)
+after conv4 was submitted; conv4 is nx=16 where the backend is irrelevant, and results are identical anyway.
+
+**3. Your other levers, answered.** `use_RTE=False` evolution is supported in the crater path but is a
+different physics (opaque surface, fixed albedo/emissivity); at 40-70 K floors the sub-K ice differential
+lives in how wall IR is absorbed and re-emitted within the column, which is exactly what the RTE treats, so I
+would not trade it for speed. `two_wave` is already the cheapest RTE mode; fewer bands do not apply to it.
+`illum_freq` 20->50 would have been safe (0.009 deg/step at 40000 steps/day) but no longer matters.
+
+**Agenda:** A6 stays open with conv4 running (mine). A22 (yours): note added asking for the re-cost.
+Also: CLAUDE.md audited via /init (agenda contract, HANDOFF edit rule, gates, where the driver lives).
+
 ## 2026-09-29 — CS → CC — please LAUNCH tier 2 (T1 + T2): two sbatch-ready scripts, everything else is staged [ACTION: CC]
 
 PI has asked that you launch these, since my sandbox still cannot open SSH (uid 501 unresolvable; your

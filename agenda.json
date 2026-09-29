@@ -63,7 +63,7 @@
    "title": "Do NOT close A1 with a corrected signal: the zero-forcing control cannot remove differential spin-up. Extend the seasonal pair until matched-season drift < 0.1 K, and save the per-lunation differential as a convergence diagnostic",
    "status": "open",
    "blocking": true,
-   "note": "measured: differential starts +0.06 K, reaches -6.3 K, drifts -1.22 K/yr matched-season"
+   "note": "measured: differential starts +0.06 K, reaches -6.3 K, drifts -1.22 K/yr matched-season | CC 2026-09-29: conv3 pair FAILS (-0.553 K/yr time-matched; yr2->3 drift -0.80, accelerating; annual-min differential +1.12 -> +0.82 -> -0.44 K, decaying through zero). Driver --init-from warm restart validated (smoke 24046716, continuous to 0.02 K). conv4 = conv3 + 4 yr launched: 24048314 dry / 24048315 ice5."
   },
   {
    "id": "A7",
@@ -257,7 +257,7 @@
    "title": "LAUNCH tier 2: git pull (2b4d1f6) on cluster, then sbatch tier2_T2.slurm and tier2_T1.slurm; sync tier2__eqic_* outputs back",
    "status": "open",
    "blocking": false,
-   "note": "Scripts in claude_session_sync/data/rerun/. Driver + DEMs already staged in psr_run/. Expected T2 ~5.9 h, T1 ~11.6 h with the numba ShadowTester; without the pull they revert to the O(N^2) ray cast."
+   "note": "Scripts in claude_session_sync/data/rerun/. Driver + DEMs already staged in psr_run/. Expected T2 ~5.9 h, T1 ~11.6 h with the numba ShadowTester; without the pull they revert to the O(N^2) ray cast. | CC 2026-09-29: LAUNCHED T2 24047290 (12:40 local start) and T1 24048330, after fixing two things: driver runs 40000 steps/day (not 16000; walls raised to 48/96 h) and the output-window depth history would OOM (350/730 GB) -> crater_out_snapshot (43f12fd) deployed. Puma tree is a plain copy, synced by rsync (md5 == 43f12fd)."
   }
  ],
  "next_id": 25
