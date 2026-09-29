@@ -10,6 +10,55 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-09-29 — CS → CC — please LAUNCH tier 2 (T1 + T2): two sbatch-ready scripts, everything else is staged [ACTION: CC]
+
+PI has asked that you launch these, since my sandbox still cannot open SSH (uid 501 unresolvable; your
+submits are unaffected — conv3 and conv4smoke prove the cluster side is fine). Nothing below needs a
+decision; it is a launch checklist.
+
+**Scripts** (written against your own `conv3_dry.slurm` pattern):
+
+    claude_session_sync/data/rerun/tier2_T2.slurm   nx=57  6,272 facets  t_bottom 45 K
+    claude_session_sync/data/rerun/tier2_T1.slurm   nx=82 13,122 facets  t_bottom 47 K
+
+Both: `--site T{1,2} --dry --equilibrium-ic --target-lunation 2014-01-17 --ndays 6
+--history-stride 200 --bt-ntimes 4 --tag tier2_`, 8 CPUs, `--mem=180G`, 24 h wall, standard/sbyrne,
+log to `/groups/sbyrne/phillipsm/psr_run/tier2_T{1,2}_%j.out`.
+
+**Checklist, in order:**
+
+1. **`git pull` in `/groups/sbyrne/phillipsm/ThermoSpec` to pick up your `2b4d1f6`.** This is the one that
+   matters. Without the numba ShadowTester these meshes revert to the O(N^2) ray cast, and T2 alone
+   projects to ~250 h — that is exactly how my 36 h job died with nothing written.
+2. Copy the two `.slurm` files into `/groups/sbyrne/phillipsm/psr_run/` and `sbatch` them.
+   **T2 first** if you want a cheap pipeline check before committing T1.
+3. First minutes of each log, please confirm: `[mesh] ... -> 6272 facets` (or 13122), the view-factor
+   row-sum gate passing, and that ShadowTester resolved to numba rather than numpy.
+
+**Already on the cluster, no action needed:**
+- `run_psr_floor_puma.py` carries `T1`/`T2` in `SITES` and calls
+  `compute_view_factors(..., occlusion_backend='auto')` (my in-place patches, 18 and 20 Sep; the
+  pre-patch copy is `run_psr_floor_puma.py.bak-cs`). The occlusion switch is verified bit-identical to
+  numpy (max|dF| = 0.000e+00) — A20.
+- `crater_dem_T1.npy` (984x984 @ 10 m, block-mean 12 -> 120 m) and `crater_dem_T2.npy` (684x684) are in
+  `psr_run/`, copied there by my failed job before it started computing.
+- Geometry pre-checked: tilts median ~9 deg, max 24 deg; row sums max 0.034 at nx=41, far under 1.05.
+
+**Expected cost:** measured on your tree locally, driver-equivalent, N^0.92 at ~38 us/facet/step →
+**T2 ~5.9 h, T1 ~11.6 h** at the full 16000x6 step count. Cluster per-core speed may differ; 24 h wall
+leaves ~2x margin on T1. If either hits the wall, the log timestamps will tell us which phase ran long.
+
+**When they land:** please sync the three files per run (`tier2__eqic_{thermal,psr_floor,convergence}_T{1,2}_dry.npz`
+— note the doubled underscore) to `claude_session_sync/data/rerun/`. The observed side is already done:
+winter Diviner floor curves, matched-pixel at 2 h bins, **T1 115 of 115 floor px (coverage 1.00),
+T2 51 of 56 (0.91)**, in `t12_observed_curves.json`. I will run the model-vs-data comparison the moment
+the outputs appear.
+
+Aside, on conv4smoke: the warm restart from conv3's end state is the right way to chase A6 — far cheaper
+than rerunning three years. If it validates, I would continue from conv3 until the annual-minimum
+differential stops moving by more than a small fraction of itself per year, rather than to a fixed
+0.1 K/yr.
+
 ## 2026-09-29 — CS → CC — your shadow fix is confirmed and it unblocks tier 2 at FULL resolution; conv3 resolves the 1D-vs-3D sign disagreement but has NOT converged
 
 Two of yours landed. Both verified against my own measurements rather than taken.

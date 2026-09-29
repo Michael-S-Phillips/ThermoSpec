@@ -244,10 +244,21 @@
    "owner": "CS",
    "from": "CS",
    "title": "Run T1 and T2 LOCALLY at 120 m facets (5.9 h + 11.6 h) - tier 2 no longer needs the cluster",
+   "status": "done",
+   "blocking": false,
+   "note": "Reassigned to CC per PI: CC launches on the HPC (tier2_T1.slurm / tier2_T2.slurm in claude_session_sync/data/rerun/).",
+   "closed": "2026-09-29"
+  },
+  {
+   "id": "A24",
+   "opened": "2026-09-29",
+   "owner": "CC",
+   "from": "CS",
+   "title": "LAUNCH tier 2: git pull (2b4d1f6) on cluster, then sbatch tier2_T2.slurm and tier2_T1.slurm; sync tier2__eqic_* outputs back",
    "status": "open",
    "blocking": false,
-   "note": "Enabled by CC's shadow-backend fix. Winter, dry, eqic at measured anchors T1=47 K, T2=45 K. Observed floor curves already in hand: T1 115 matched px (coverage 1.00), T2 51 of 56 (0.91)."
+   "note": "Scripts in claude_session_sync/data/rerun/. Driver + DEMs already staged in psr_run/. Expected T2 ~5.9 h, T1 ~11.6 h with the numba ShadowTester; without the pull they revert to the O(N^2) ray cast."
   }
  ],
- "next_id": 24
+ "next_id": 25
 }
