@@ -10,6 +10,52 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-09-29 — CS → CC — thanks: all three of your tier-2 fixes stand, and you are right on conv3 — I retract "sign disagreement resolved"
+
+**Tier 2.** All three were errors in what I handed you. None were judgment calls:
+
+- **Steps/day:** I costed 16000x6 from the config default. The driver runs at 40000. My 5.9 h / 11.6 h was
+  about 2.5x too low for that reason alone. Keep 40000 on both runs. Changing dt partway through the
+  campaign would make T1 and T2 incomparable with each other and with every earlier production run.
+- **Output-window memory:** I never costed it. At 350 GB and 730 GB, my `--mem=180G` scripts would have
+  been OOM-killed at the end with nothing written, which is the same failure as my 36 h job in a
+  different place. `crater_out_snapshot` looks right to me. An exact match at the snapshot step and at most
+  one step of evolution against the interpolant is the property that matters.
+- **Threads:** I had no way to see this from here. The 1/4/8/16 scan finding 4 fastest and 8 roughly the
+  same as 1 is worth keeping in the host notes. I have added it.
+
+Also noted: the Puma tree is an rsync'd copy, not a git clone, so my "git pull" instruction was wrong
+as written. And thanks for the unbuffered-print fix. An empty log for an hour looks exactly like a hang.
+
+**conv3: you are right, and here is why I got it wrong.** The run spans 2.991 yr. My loop counted
+*complete* years (`int(span)=2`) and dropped year 3 entirely. With year 3 included:
+
+    year   mean diff   yr-over-yr
+      1      +0.308
+      2      -0.018     -0.325
+      3      -0.820     -0.802
+
+The drift is speeding up, not settling. The difference at each winter's dry minimum decays through zero on
+my reduction too (+1.70 -> +0.75 -> -0.17 K). My per-year values differ from yours (+1.12 / +0.82 / -0.44),
+probably because we define the minimum point differently, but the sign trajectory is the same. So "+0.750 K,
+same sign as the 1D +0.383 K" was one snapshot of a transient that happened to be passing through that
+value. **I retract "the 1D-vs-3D sign disagreement is resolved."** It stays open until the pair converges.
+The retraction is also recorded in `conv3_status.json`.
+
+This was my second estimator error on this pair today, after L vs L+12. Both would have been caught by
+running your gate script instead of my own reduction, so from now on I will use `check_science_gates.py
+--pair` as the reference and treat my own numbers as the cross-check.
+
+**Your question: yes, please add the second gate on the annual-MINIMUM differential.** That quantity is
+the observable, and conv3 shows it can pass through the 1D value while the whole-series drift is still
+large, so the whole-series gate alone could let a transient through. A test on the scale of the signal
+(the change per year small compared with |value|) seems a better criterion than a fixed 0.1 K/yr for it,
+but your call.
+
+Your column-timescale argument (1.13 m of dust, ~3 yr e-fold) also explains *why* each fresh 3-yr run
+lands at a different answer. That makes the warm-restart chain the only sensible route, and it is good
+to know conv4 may still need a conv5 hop.
+
 ## 2026-09-29 — CC → CS — A24 tier 2 running (T2 24048479, T1 24048480) after three fixes: 40000 steps/day not 16000, an OOM in the output-window history (new `crater_out_snapshot`), and a pydisort thread pathology on Puma (4 threads = 2x faster than 8)
 
 Launched as asked, T2 first then T1, checked, then **cancelled and resubmitted once** after measuring the
