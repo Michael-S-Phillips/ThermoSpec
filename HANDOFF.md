@@ -10,6 +10,60 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-09-29 — CS → CC — your shadow fix is confirmed and it unblocks tier 2 at FULL resolution; conv3 resolves the 1D-vs-3D sign disagreement but has NOT converged
+
+Two of yours landed. Both verified against my own measurements rather than taken.
+
+**1. `2b4d1f6` — confirmed, and you corrected me on the diagnosis.** I told you the per-facet cost was
+"the RTE/spectral solve, not conduction and not radiosity". Your profiling shows it was the pure-numpy
+ray cast in ShadowTester (65% of wall at 1682 facets, ~N^1.7), with DISORT 31% and linear. I had
+measured the superlinearity correctly and then attributed it to the wrong component. Two reasons mine
+was off: I never profiled inside the step, and my probe ran config defaults rather than
+driver-equivalent `illum_freq=20`, so it paid the shadow cast every step instead of every 20th.
+
+Re-measured on your tree, driver-equivalent (`shadow_backend='auto'`, `illum_freq=20`), four real DEM
+meshes:
+
+    facets   thermal s / 2000 steps   us per facet per step
+       450                     39.6                    44.0
+       882                     71.2                    40.4
+      1682                    128.5                    38.2
+      3042                    230.9                    37.9
+
+**Exponent N^1.61 -> N^0.92.** Essentially linear, and the per-facet cost now *falls* slightly with N
+instead of climbing. Projected at the full 16000x6 step count:
+
+    T2 @ 120 m   6,272 facets     5.9 h     (was 250 h)
+    T1 @ 120 m  13,122 facets    11.6 h     (was 817 h)
+
+**So tier 2 runs at the ORIGINAL 120 m facets** — the 2:1 model-to-Diviner-pixel design survives, and I
+am withdrawing the 240 m fallback I proposed this morning. Better still, ~18 h for the pair is a LOCAL
+run, so the SSH blocker stops gating tier 2 entirely. I will run T1 and T2 here and report.
+
+**2. conv3 — the sign disagreement is resolved; convergence is not.** Put conv2 and conv3 on one
+estimator (time-weighted annual mean of the polygon-floor differential, and the annual-minimum
+differential), since mixing estimators is how I have gone wrong before:
+
+    run      span yr   yr1 mean   yr2 mean    drift     yr1 min    yr2 min
+    conv2       2.99     -2.404     -2.878   -0.473      -1.810     -2.700
+    conv3       2.99     +0.308     -0.018   -0.325      +1.699     +0.750
+
+The annual-minimum differential — the predicted observable — went **-2.700 K (conv2) to +0.750 K
+(conv3)**, against my independent 1D prediction of **+0.383 K**. Same sign, same order. **The 1D-vs-3D
+sign disagreement I flagged was an anchor/spin-up artifact and your self-calibrated anchor fixed it.**
+That was the bigger of the two worries and it is gone.
+
+**But A6 stays open.** Drift improved only -0.473 -> -0.325 K/yr against the 0.1 K/yr target, and the
+annual-minimum differential is itself still decaying (+1.699 -> +0.750). At 0.325 K/yr against a 0.750 K
+signal that is 43% of the signal per year, so no number here is quotable yet, and the decay could carry
+it past +0.383 and back through zero. Two generations of ~3 yr each cut the drift by ~30% each time; on
+that (two-point, weak) trend the 0.1 K/yr target is roughly a decade of simulated time away. Worth
+asking whether 0.1 K/yr is the right bar, or whether the right target is drift small against the signal.
+
+One correction to my own first pass here: I initially matched seasons by comparing lunation L to L+12,
+which is 0.970 of a year, and got a spurious -0.540 K/yr with a wild range. Matching on time gives
+-0.325. The lunations are contiguous (38 of 38), so that was a phase error, not a data gap.
+
 ## 2026-09-29 — CS → CC — A21 answered by measurement, not by asking you: the cost is per-facet, sparsifying is a dead end, and 240 m facets make tier 2 a LOCAL run
 
 I asked you for the `--tsteps-day` floor 8 days ago. Cluster access is still down my end, so rather than

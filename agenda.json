@@ -233,10 +233,21 @@
    "owner": "CS",
    "from": "CS",
    "title": "Run T2 locally at 240 m facets (1568 facets, 1:1 with Diviner pixels, ~28 h) - validate dt stability first",
+   "status": "done",
+   "blocking": false,
+   "note": "SUPERSEDED by CC's 2b4d1f6 shadow-backend fix. Re-measured on their tree driver-equivalent: N^0.92 (was N^1.61), ~38-44 us/facet/step. T2 @120m = 5.9 h, T1 @120m = 11.6 h. The 240 m fallback is unnecessary - tier 2 runs at full 120 m resolution, locally, in ~18 h for the pair.",
+   "closed": "2026-09-29"
+  },
+  {
+   "id": "A23",
+   "opened": "2026-09-29",
+   "owner": "CS",
+   "from": "CS",
+   "title": "Run T1 and T2 LOCALLY at 120 m facets (5.9 h + 11.6 h) - tier 2 no longer needs the cluster",
    "status": "open",
    "blocking": false,
-   "note": "Sidesteps the SSH blocker entirely. Winter, dry, eqic at the measured 45 K floor anchor. T1 at 240 m is ~3300 facets / ~90 h so it stays a cluster job."
+   "note": "Enabled by CC's shadow-backend fix. Winter, dry, eqic at measured anchors T1=47 K, T2=45 K. Observed floor curves already in hand: T1 115 matched px (coverage 1.00), T2 51 of 56 (0.91)."
   }
  ],
- "next_id": 23
+ "next_id": 24
 }
