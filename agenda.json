@@ -179,9 +179,10 @@
    "owner": "CS",
    "from": "CS",
    "title": "Tier 2 first runs: T1 (4.85 km, -88.92/150.60, 106-309 Diviner px/bin) then T2 (3.36 km, -89.63/-48.22, 78-133 px) at 120 m facets over a 2-diameter box, winter epoch, dry",
-   "status": "open",
+   "status": "done",
    "blocking": false,
-   "note": "120 m puts 2 model facets per Diviner pixel linearly so the model block-averages onto the data grid with no interpolation. T1 1.38 GB / 2.0 h, T2 0.32 GB / 0.3 h. This is the first model-vs-Diviner comparison at a resolution where the comparison means anything."
+   "note": "Superseded by A24 (CC launched T1/T2 on the HPC 2026-09-29, jobs 24048480/24048479). The px/bin and cost figures in this item's title are stale: measured matched floor px are T1 115, T2 51; cost ~40 h each at 40000 steps/day, 4 threads.",
+   "closed": "2026-09-30"
   },
   {
    "id": "A18",
