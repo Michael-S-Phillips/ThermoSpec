@@ -30,7 +30,10 @@ class Simulator:
 	radiative transfer, and heat diffusion time-stepping.
 	"""
 	def __init__(self, config: SimulationConfig = None, crater_mesh=None, crater_selfheating=None,
-	             sun_vectors=None):
+	             sun_vectors=None, step_callback=None):
+		# optional per-step hook: step_callback(sim, j) after step j is complete (histories appended).
+		# Used by the PSR driver for periodic restart checkpoints; None = no-op (default, zero cost).
+		self.step_callback = step_callback
 		# Initialize configuration
 		self.cfg = config or SimulationConfig()
 		# Optional real (e.g. SPICE ephemeris) solar direction series for the crater/terrain model,
@@ -618,11 +621,17 @@ class Simulator:
 			return
 		bad = int(np.argmin(ok.astype(int)))
 		Tf = T[:, bad]
+		nmin = int(np.nanargmin(np.where(np.isfinite(Tf), Tf, np.inf))); nmax = int(np.nanargmax(np.where(np.isfinite(Tf), Tf, -np.inf)))
+		# keep everything a post-mortem needs (the driver dumps it next to the crash state)
+		self.last_instability = dict(step=int(step), facet=bad, node_min=nmin, node_max=nmax,
+				T_column=np.array(Tf, dtype=float), T_surf=float(np.asarray(self.T_surf_crater)[bad]),
+				T_crater=np.array(T, dtype=float), n_bad=int((~ok).sum()), bad_facets=np.nonzero(~ok)[0])
 		raise RuntimeError(
 			"Crater/terrain thermal instability at step %d: facet %d temperature out of range "
-			"(min %.4g K, max %.4g K, all-finite=%s). The surface-radiative boundary condition is "
-			"dt-limited by the warmest sunlit facet, not the cold floor -- reduce dt (increase "
-			"tsteps_day)." % (step, bad, np.nanmin(Tf), np.nanmax(Tf), bool(np.isfinite(Tf).all())))
+			"(min %.4g K at node %d, max %.4g K at node %d, T_surf %.4g K, %d facets bad, all-finite=%s). "
+			"Hot facet: the surface-radiative BC is dt-limited by the warmest sunlit facet -- reduce dt. "
+			"Cold facet near 0 K: see sim.last_instability (column dumped by the driver)."
+			% (step, bad, np.nanmin(Tf), nmin, np.nanmax(Tf), nmax, np.asarray(self.T_surf_crater)[bad], int((~ok).sum()), bool(np.isfinite(Tf).all())))
 
 	def _calculate_absorbed_solar_energy(self, dt: float) -> float:
 		"""
@@ -1186,6 +1195,8 @@ class Simulator:
 				if self._crater_snapshot_mode and j in self._crater_snap_steps:
 					for k in self._crater_snap_steps[j]:
 						self.T_crater_out[:, :, k] = self.T_crater
+			if self.step_callback is not None:
+				self.step_callback(self, j)
 
 
 			# Terminate here for fixed temperature run, saving outputs at initialization temperature. Useful for spectroscopy. 
