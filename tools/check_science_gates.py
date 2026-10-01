@@ -17,6 +17,10 @@ GATES
                         Catches the undrained interior maximum (109 K at node 159).
   G4 forcing regime     A seasonal run must actually excite the annual wave: report
                         the sun-elevation span and whether it crosses the horizon.
+  G5 drift / PAIR       Matched-season (t vs t+1 yr) drift of the floor mean (per run) and of the
+                        ice-dry differential (--pair); fail if |drift| > 0.1 K/yr.
+  G6 annual-min (--pair) Ice-dry differential at the dry floor's annual minimum, year over year:
+                        fail unless |change| < 0.25|value| and < 0.1 K (the observable; CS 2026-10-01).
 Exit 0 only if every applicable gate passes on every file.
 """
 import glob, json, os, sys
@@ -167,6 +171,43 @@ def _annual_drifts(means):
         out.append(float(np.interp(t1, tc, v)) - float(v0))
     return out
 
+def _annual_min_differential(md_dry, md_ice):
+    """Per model year (365.25 d of run time), the ice-dry differential at the lunation of the DRY floor's
+    annual minimum -- the observable (CS 2026-10-01). Returns [(year_index, L_min, diff_at_min)]."""
+    Ls = sorted(L for L in md_dry if L in md_ice)
+    if not Ls:
+        return []
+    out = []
+    yr = 0
+    while True:
+        in_year = [L for L in Ls if yr * YEAR_S <= (L + 0.5) * P_LUN < (yr + 1) * YEAR_S]
+        if len(in_year) < 10:                       # partial trailing year: not a full winter -> stop
+            break
+        Lmin = min(in_year, key=lambda L: md_dry[L])
+        out.append((yr, Lmin, md_ice[Lmin] - md_dry[Lmin]))
+        yr += 1
+    return out
+
+def gate_pair_annual_min(d_dry, d_ice):
+    """G6 annual-MINIMUM differential convergence (CS 2026-10-01, agreed): conv3 showed the ice-dry
+    differential at the winter minimum passing through the 1D prediction while the whole-series drift was
+    still large, so the whole-series gate alone can let a transient through. Per year take the differential
+    at the dry floor's annual-minimum lunation; PASS only if the last year-over-year change is both
+    < 0.25 x |value| and < 0.1 K. Reported alongside G5-pair, never instead of it."""
+    md_dry, tag = _per_lunation_means(d_dry)
+    md_ice, _ = _per_lunation_means(d_ice)
+    if md_dry is None or md_ice is None:
+        return None, "need two convergence npz with floor history"
+    am = _annual_min_differential(md_dry, md_ice)
+    if len(am) < 2:
+        return None, f"run too short for a year-over-year annual-minimum comparison ({len(am)} full year(s))"
+    series = "  ".join(f"yr{y+1}(L{L}) {v:+.3f}" for y, L, v in am)
+    (_, _, v0), (_, _, v1) = am[-2], am[-1]
+    ch = v1 - v0
+    ok = (abs(ch) < 0.25 * abs(v1)) and (abs(ch) < 0.1)
+    return ok, (f"ice-dry at dry annual minimum: {series}; last change {ch:+.3f} K/yr vs value {v1:+.3f} K "
+                f"(need |change| < 0.25|value| and < 0.1 K); {tag} floor")
+
 def gate_pair_drift(d_dry, d_ice):
     """PAIRED matched-season convergence (CS 2026-09-03): the A1 decider. G5 gates each run separately, but
     two runs can both pass while their DIFFERENCE still drifts (opposite-sign drifts). Compute the ice-dry
@@ -208,8 +249,12 @@ def main():
         ok, msg = gate_pair_drift(d_dry, d_ice)
         tag = "SKIP" if ok is None else ("PASS" if ok else "FAIL")
         print(f"[{tag}] PAIR drift  {msg}")
-        print(f"\nOVERALL: {'PASS — differential converged' if ok else ('SKIP' if ok is None else 'FAIL — differential not converged')}")
-        return 0 if ok else 1
+        ok6, msg6 = gate_pair_annual_min(d_dry, d_ice)
+        tag6 = "SKIP" if ok6 is None else ("PASS" if ok6 else "FAIL")
+        print(f"[{tag6}] G6 ann-min  {msg6}")
+        allok = bool(ok) and (ok6 is not False)
+        print(f"\nOVERALL: {'PASS — differential converged' if allok else ('SKIP' if ok is None else 'FAIL — differential not converged')}")
+        return 0 if allok else 1
     files = sys.argv[1:] or sorted(
         glob.glob(os.path.join(SYNC, "data", "**", "prod_*psr_floor*.npz"), recursive=True) +
         glob.glob(os.path.join(SYNC, "data", "**", "seasonal_*.npz"), recursive=True) +
