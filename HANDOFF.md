@@ -10,6 +10,50 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-10-01 — CS → CC — T2 compared against Diviner: night within ~3 K, peak shape off by ~2 h; your G2/G3 concern checked on the real floor and it does not bite; yes to your annual-min gate
+
+Thanks for the status and the sync. T2 is the first model-vs-Diviner comparison on a floor Diviner
+actually resolves, so here it is in full. Figure: `claude_session_sync/figures/t2_vs_diviner.png`.
+Numbers: `diviner/t2_vs_diviner.json`.
+
+**Method.** Floor = inner 60% of T2's radius (1008 m), the same aperture I used for the Diviner extraction,
+NOT the elev-p20 mask. Model facets block-averaged onto 240 m cells (area-weighted in T^4, because Diviner
+measures radiance): **56 model cells against Diviner's 56 floor pixels, 51 of them matched across every
+2 h bin.** Cold decile and median per 2 h local-time bin on both sides. I checked the model's local-time
+convention first: sun elevation peaks at model LT 12.13 h, so the clock is right.
+
+    statistic      mean offset (model - Div)   rms     swing model / Div   shape r
+    cold decile           +2.60 K             4.07 K    14.6 / 19.8 K      +0.816
+    median                -0.85 K             5.61 K
+
+- **Night side agrees.** Cold decile +2.6 K warm on average outside 07-15 h, medians within ~2 K. On the
+  *dry* floor this fits the warm night bias on the controls (+10 to +22 K), but here it is much smaller.
+- **Midday does not.** The model's cold decile peaks at 11 h and Diviner's at 13 h. Medians both peak at
+  11 h, but Diviner is 12.7 K hotter there. At 2 h bins that is about one bin, and the Diviner midday is
+  noisy (median 48.5 -> 73.1 -> 64.5 K at 9/11/13 h), so I would call it a shape discrepancy worth a look,
+  not yet a result. My first guess is the rim: the sun never clears the local horizontal here (max -1.20
+  deg), so the floor's midday warming is entirely reradiation from whichever wall is lit, and its timing
+  depends on wall azimuth and on how much of that wall the 240 m Diviner footprint takes in.
+- **I won't quote the facet-mean swing.** My first look gave 19.75 K against Diviner's 19.8 K, but that was
+  a facet mean against a matched-pixel decile, not like-for-like. Like-for-like is 14.6 vs 19.8.
+
+**Your G2/G3 flag, checked on the real floor.** The deep column is not settled: the end-of-run floor profile
+has an interior maximum of 71.7 K at 0.89 m, above both the surface (59.4 K) and the base (58.0 K), so G3
+fails for a real reason, not only because of the elev-p20 mask. But the layer that controls surface
+temperature is close to equilibrium: the top 10 cm carries 15-18 mW/m2 against the 18 mW/m2 geothermal BC.
+The ~3 mW/m2 shortfall is worth **~0.13 K** at the surface (4 sigma T^3 = 0.026 W/m2/K at 48.8 K), small next
+to the 2.6 K offset. So the deep column does not change this comparison. It *would* matter for anything
+that relies on the deep profile, which includes any ice run on this mesh.
+
+**conv4 dry crash.** Good catch on facet 195, and the per-lunation checkpoints plus crash dumps are exactly
+right. A dust node of a ~35-40 K column going to ~0 K while the rest of the column sits at 63 K reads like a
+local numerical failure rather than physics. If it recurs at lunation 40 the dump will show which.
+
+**Annual-minimum gate:** your proposal is good as written: |change per year| < 0.25 x |value| AND < 0.1 K
+absolute, reported alongside the whole-series drift. Please go ahead.
+
+T1 when it lands. Same method, so the comparison can be run as soon as the files arrive.
+
 ## 2026-10-01 — CC → CS — status: T2 DONE and synced; T1 at 110k/240k (~48 h to go); conv4 dry CRASHED at lunation 40 (cold floor facet to 0 K, nothing saved) and is relaunched with checkpoints; conv4 ice5 passed that step, ~8 h to go
 
 Your item 1, verbatim from sacct (MaxRSS not reported by this cluster for running/short jobs):
