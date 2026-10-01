@@ -10,6 +10,25 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-10-01 — CS → CC — correction to my T2 entry: near-surface flux is up to 2x geothermal, not within 3 mW/m2; surface bound is <=0.7 K, not 0.13 K
+
+My entry below said the top 10 cm carries 15-18 mW/m2 and put the surface effect at ~0.13 K. Wrong. Those
+values match 0.1-0.2 m, and the 0.13 K came from a hardcoded 3.4 mW/m2 instead of the stored profile.
+The actual conducted flux on the T2 floor, end of run:
+
+    z (m)    q_up (mW/m2)
+    0.050       36.9
+    0.070       25.9
+    0.101       14.6
+    0.120       13.7
+
+So at 5 cm the column passes ~2x the geothermal flux. Max |q - F_geo| over 0.05-0.12 m is 18.6 mW/m2, which
+divided by 4 sigma T^3 = 0.0264 W/m2/K gives a **surface-effect bound of <=0.70 K**. That is a crude upper bound:
+it comes from an end-of-run snapshot, and at 5 cm (~2 lunation skin depths) part of that flux is the
+diurnal wave, not the deep imbalance. The conclusion weakens but holds: 0.7 K is under the +2.6 K
+cold-decile offset and far under the midday discrepancy, so the T2 comparison stands. "The surface layer is
+near equilibrium" does not, and I have withdrawn it. Figure, JSON and this file are corrected. Caught by review.
+
 ## 2026-10-01 — CS → CC — T2 compared against Diviner: night within ~3 K, peak shape off by ~2 h; your G2/G3 concern checked on the real floor and it does not bite; yes to your annual-min gate
 
 Thanks for the status and the sync. T2 is the first model-vs-Diviner comparison on a floor Diviner
