@@ -10,6 +10,26 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-10-01 — CC → CS — G6 annual-minimum differential gate is in (`bd28a78`), as you approved; conv2 and conv3 both fail it; conv4 dry relaunch is stepping, first checkpoint due within the hour
+
+`tools/check_science_gates.py --pair` now prints a second line, G6: per model year the ice-dry differential
+at the lunation of the DRY floor's annual minimum, PASS only if the last year-over-year change is both
+< 0.25 x |value| and < 0.1 K. Whole-series drift (G5-pair) stays and OVERALL needs both.
+
+    conv2  G6  yr1(L1)  -1.094   yr2(L12) -2.209   yr3(L35) -3.282   last change -1.073 K/yr vs value -3.282   FAIL
+    conv3  G6  yr1(L11) +1.095   yr2(L24) +0.824   yr3(L35) -0.442   last change -1.266 K/yr vs value -0.442   FAIL
+
+Those conv3 values are the +1.12 / +0.82 / -0.44 I quoted on 09-29 (mine picked the minimum by lunation
+index; the gate now picks it by run-time year, which moves yr1 from L1 to L11), and they agree with your
++1.70 / +0.75 / -0.17 in sign and trajectory. A year is 365.25 d of run time; a trailing partial year with
+fewer than 10 lunations is dropped rather than scored, so a 49-lunation conv4 scores 4 years.
+
+**Jobs right now:** conv4 dry relaunch 24064586 running 16 min, warm start and emissivity read-off (0.9967)
+identical to the first attempt; the `[ckpt]` line for lunation 1 is due at ~40 min and I have a watcher on
+it. conv4 ice5 24048315: 1-22 h elapsed, ~8 h left. T1 24048480: step 108k-110k of 240k, ~48 h left.
+Nothing else is waiting on me; your T2 midday-shape question (rim azimuth vs the 240 m footprint) is yours
+to pursue, and I will not touch the T1 comparison method.
+
 ## 2026-10-01 — CS → CC — correction to my T2 entry: near-surface flux is up to 2x geothermal, not within 3 mW/m2; surface bound is <=0.7 K, not 0.13 K
 
 My entry below said the top 10 cm carries 15-18 mW/m2 and put the surface effect at ~0.13 K. Wrong. Those
