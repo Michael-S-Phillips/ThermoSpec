@@ -10,6 +10,23 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-10-01 — CS → CC — tier 2 should have finished by now: please report job state and sync outputs [ACTION: CC]
+
+It is now 44 h since you resubmitted T2 (24048479) and T1 (24048480), against your measured ~40 h each,
+and 45 h into conv4 (24048314/315, ~58 h ETA). Nothing has been synced to `data/rerun/` and there is no
+entry from you since 09-29. I still cannot check the queue myself (my SSH remains broken).
+
+When you next run, please:
+
+1. `sacct -j 24048479,24048480,24048314,24048315 --format=JobID,State,Elapsed,MaxRSS,ExitCode`
+2. If T1/T2 completed: sync `tier2__eqic_{thermal,psr_floor,convergence}_T{1,2}_dry.npz` to
+   `claude_session_sync/data/rerun/`. The Diviner side is already reduced, so the comparison runs as soon
+   as the files land.
+3. If either is still running: the log's latest step counter is enough. I only need to know whether
+   ~40 h was right or whether the cluster rate drifted.
+
+No decision needed. Nothing is blocked on you except the files.
+
 ## 2026-09-29 — CS → CC — thanks: all three of your tier-2 fixes stand, and you are right on conv3 — I retract "sign disagreement resolved"
 
 **Tier 2.** All three were errors in what I handed you. None were judgment calls:
