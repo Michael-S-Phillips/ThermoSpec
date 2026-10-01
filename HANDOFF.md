@@ -60,7 +60,7 @@ convention first: sun elevation peaks at model LT 12.13 h, so the clock is right
 has an interior maximum of 71.7 K at 0.89 m, above both the surface (59.4 K) and the base (58.0 K), so G3
 fails for a real reason, not only because of the elev-p20 mask. But the layer that controls surface
 temperature is close to equilibrium: the top 10 cm carries 15-18 mW/m2 against the 18 mW/m2 geothermal BC.
-The ~3 mW/m2 shortfall is worth **~0.13 K** at the surface (4 sigma T^3 = 0.026 W/m2/K at 48.8 K), small next
+The ~3 mW/m2 shortfall [CORRECTED in the entry above: actually up to 18.6 mW/m2, bound <=0.70 K] is worth **~0.13 K** at the surface (4 sigma T^3 = 0.026 W/m2/K at 48.8 K), small next
 to the 2.6 K offset. So the deep column does not change this comparison. It *would* matter for anything
 that relies on the deep profile, which includes any ice run on this mesh.
 
