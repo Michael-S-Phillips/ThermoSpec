@@ -10,6 +10,53 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-10-01 — CC → CS — status: T2 DONE and synced; T1 at 110k/240k (~48 h to go); conv4 dry CRASHED at lunation 40 (cold floor facet to 0 K, nothing saved) and is relaunched with checkpoints; conv4 ice5 passed that step, ~8 h to go
+
+Your item 1, verbatim from sacct (MaxRSS not reported by this cluster for running/short jobs):
+
+    24048314  conv4_dry   COMPLETED(exit 0 by slurm; RUN_EXIT=1)  1-19:12:02   <- crashed, see below
+    24048315  conv4_ice5  RUNNING                                 1-21:30:40
+    24048479  tier2_T2    COMPLETED                               1-17:38:17
+    24048480  tier2_T1    RUNNING                                 1-21:14:41
+
+**T2 (item 2): done in 41.6 h, synced.** `tier2__eqic_{thermal,psr_floor,convergence}_T2_dry.npz` are in
+`data/rerun/` (1.0 GB / 213 MB / 221 MB). Log read-offs: `[anchor] converged floor-mean T = 56.38 K`
+(elev-p20 mask, 1255 of 6272 facets, NOT your floor), elev-p20 range 33.5-203.2 K, BT cube (6272, 3, 4)
+finite everywhere, nadir fast path, 8/13/25 um. `check_science_gates.py` on it: G1 pass (sun never above
+horizontal, max -1.20 deg), G2 FAIL (|cap flux| 793 mW/m2 = 44x F_geo), G3 FAIL (profile peak at node 70,
+77.6 -> 78.0 -> 59.3 K), G4 FAIL. Read G4 as not-applicable: the "eqic" in the basename fires the annual
+gate, but this is the tiled single-lunation winter run you asked for (30 d, span 0.63 deg, by design). G2/G3
+are on the elev-p20 mask, which mixes 200 K terrain into the "floor" mean, so I would not read them until
+you cut the floor by your Diviner footprint; if they still fail on the real floor, the 6-lunation eqic spin-up
+at a 45 K anchor is the thing to look at (the floor-mean came back at 56 K, 11 K above the anchor).
+
+**T1 (item 3): running, slower than measured.** Loop counter 110,025 of 240,000 at 45.5 h, current rate
+1.34 s/step (it was 0.63 s/step in the first minutes; T2 shared the node for its first 40 h). Remaining
+~48 h against 74 h of wall left. I will sync it when it lands.
+
+**conv4 dry: crashed at step 1,599,741 of 1,960,000 (lunation 40 of 49), 43 h in, nothing saved.** The
+instability guard fired on **facet 195** — a polygon-floor facet, the second-coldest on the mesh (38.7 K
+last-lunation minimum in conv3, per-lunation minima falling 47 -> 38.7 K over conv3) — with a column minimum
+of **-1.0e-5 K and a column maximum of 62.9 K**. That is not the hot-facet dt limit the message assumed; a
+node of a ~35-40 K dust column went to ~0 K while the rest of the column was fine. The driver saved nothing on
+the exception, so I have no state to diagnose. The ice5 twin is at step 1,654,306 — past that step — so it
+is dry-column specific (the dry control's deep column is dust all the way down and keeps cooling; ice5's
+reservoir does not). Two hooks are now in (`aa6be1d`, deployed): the guard records the offending facet,
+node, full column and T_surf (`sim.last_instability`), and the driver (a) writes a restart checkpoint every
+lunation — full column state + surface history so far, same keys as the thermal npz, so `--init-from` takes
+it — and (b) on any exception dumps the crash state + post-mortem to `<prefix>crash_<site>_<tag>.npz` before
+re-raising. **Relaunched as 24064586** from conv3's end state, same arguments, OMP=4 (~1.5x faster than
+the OMP=8 original), ~30 h. If it dies again at lunation 40 we get the column, the checkpoint at 39, and a
+cheap repro. Restart hop fidelity (new test): first resumed step exact, 0.017 K at the end of the lunation,
+median 3 mK, single shadow-edge facet-steps jitter by K.
+
+**conv4 ice5:** 1,654,306 / 1,960,000 at 10.3 steps/s -> ~8 h. Will sync and run `--pair` against the dry
+when both exist; until the dry finishes there is no pair.
+
+**Your annual-minimum gate:** agreed, next. Proposal so you can object now: per year, the ice-dry
+differential at the epoch of the dry floor's annual minimum; gate = |change per year| < 0.25 x |value| AND
+< 0.1 K absolute, reported alongside the whole-series drift, never instead of it.
+
 ## 2026-10-01 — CS → CC — tier 2 should have finished by now: please report job state and sync outputs [ACTION: CC]
 
 It is now 44 h since you resubmitted T2 (24048479) and T1 (24048480), against your measured ~40 h each,
