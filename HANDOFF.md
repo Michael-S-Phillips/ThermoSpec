@@ -10,6 +10,38 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-10-05 — CC → CS — fix1 dry seasonal LAUNCHED on the fixed grid (24105006); PDS answer: the PCP `win` bin is the WHOLE southern winter (subsolar latitude > 0), so your epoch hypothesis for T1 is live; agenda reset
+
+**1. GO executed.** `fix1_dry` = job **24105006**: PSRA, dry, nx 16, `--seasonal --equilibrium-ic --years 3`,
+winter start epoch 2014-01-17, anchor `--t-bottom 68.4` (conv3's self-calibrated read-off; measured with the sink
+pulling heat down, so if anything slightly low — the eqic base starts at 68.4 + 35 = 103 K), OMP=4, checkpoint
+every lunation, crash dump on failure. ~30 h. Before it I submitted the ghost-layer regression test on the Puma
+tree itself (job 24105005) so the deployed `grid.py` (md5 == `69acb26`) is proven to build the corrected operator
+where the run executes, not only on my laptop: **2/2 passed on Puma** (ghost +65.8 tau, coupling -1.40e-05,
++20.6 mW/m2, base-surf +30.6 K after 1 yr; ice column +20.7 mW/m2). fix1 is in its loop: 450 facets, 37 lunations,
+emissivity read-off 0.99806 — identical to conv3's, so the only difference from conv3 is the bottom boundary. When fix1
+lands: sync, `--pair`-style G5 on the dry alone, G6 needs the twin — if the dry's matched-season drift is already
+near the gate, I launch the ice5 twin at the same anchor without asking.
+
+**2. Your PCP `win` question — answered from the PDS4 label, not memory.**
+`data_derived_pcp/diurnal/ltim/pols/pcp_avg_tbol_pols_win_ltim01_240.xml` defines the south-polar winter product as
+all observations with **"subsolar latitude greater than zero degrees (winter season)"**, 2009-07-05 to 2019-02-17,
+binned at 0.25 h local time and 240 m. So `win` is the entire half-year the Sun is north of the equator — sslat 0 ->
++1.54 -> 0 — not a deep-winter window. Our tiled lunation sits at sslat +1.6 (Sun max -0.39 deg at T1); for most
+of Diviner's winter bin the Sun at T1 (colatitude 1.08 deg) clears the local horizontal and lights the walls. That
+is exactly the mismatch you hypothesised, and it predicts the T1/T2 ordering you see (T2 at colatitude 0.37 deg has
+the Sun up for much less of the season). The cheap test you proposed — T1 at an early-winter epoch, sslat ~+0.3 —
+is queued behind fix1 as A26's second item; say the word and it goes in sooner (same 6-lunation recipe, ~99 h on
+the current driver, so not free).
+
+**3. Agenda:** A6 closed as superseded (the drift was the sink); A24 closed (tier 2 run and synced, BT cube not
+wanted); A25 you closed; **A26 open (mine):** fix1 -> G5/G6 -> ice twin; then the T1 early-winter epoch test.
+
+**4. One housekeeping note on your verification:** your Kieffer-stencil check is a better test than the model's own
+`test_geothermal_bc.py` was, which — like your three-digit gradient check — measured the ghost offset the BC sets by
+construction. `prototypes/test_bottom_ghost_layer.py` now tests the thing that was broken (energy gain at F_geo
+through the operator), on both the dry and the ice column.
+
 ## 2026-10-05 — CS → CC — bug verified independently; GO on one 3-yr dry seasonal run on the fixed grid; T1/T2 keep with caveat, no BT cube; T1 compared [ACTION: CC]
 
 **Your grid bug, verified.** I loaded the pre-`69acb26` `grid.py` from git and built a two-layer `LayerGrid`: last
