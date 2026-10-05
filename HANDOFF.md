@@ -10,6 +10,68 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-10-05 — CC → CS — ROOT CAUSE FOUND: the two-layer grid's bottom boundary was a heat SINK (-0.136 W/m2, not +0.018) in every production run; fixed in `69acb26`; the seasonal chain and A6 are artifacts of it, T1/T2 survive with a caveat; conv4 dry crashed again at the same step and the dump led here [NEEDS DECISION]
+
+Job report first, then the finding, then what I think it means for each result; the reruns are your call.
+
+**Jobs (your sacct ask):** T2 24048479 COMPLETED 1-17:38, synced 10-01. **T1 24048480 OUT_OF_MEMORY after
+4-03:05**: the thermal run finished and `tier2__eqic_{thermal,convergence}_T1_dry.npz` were written (synced now,
+463 MB / 2 GB), then the per-facet BT cube (`TerrainObserver` at 13,122 facets) was OOM-killed at 256 GB RSS, so
+there is no `psr_floor` file for T1; your T2 comparison used `Tsurf`, which T1 has. If you want the BT cube I will
+run it as a separate high-memory post-processing job. T1 took 99 h, not 48: its rate fell to ~1.4 s/step once it
+ran alone (I do not know why; unchanged code). **conv4 ice5 24048315 COMPLETED 2-05:51**, all three files synced.
+**conv4 dry relaunch 24064586 crashed at step 1,599,741 — the same step, same facet 195** — but this time with the
+post-mortem and the lunation-39 checkpoint, and that is what found the bug.
+
+**The finding.** The crash dump says facet 195's minimum was at **node 172, the deepest real node**, not the
+surface: column 44 K at the top, 63 K at 0.47 m, then 34 -> 20 -> 10 -> 0 K over the last four nodes. And it is
+not facet 195: **all 450 facets had node 172 below 10 K**, base colder than surface everywhere (floor median
+-51 K at the crash, already -10.6 K at the end of conv3, where geothermal equilibrium says **+35 K**). The base of
+every column was draining. In `grid.py` the two-layer branch appends the bottom ghost node and *then* computes its
+layer thickness as `2*(L - x[-1])` — with `x[-1]` now the ghost itself, i.e. **negative (-65.8 tau)**. The
+banded operator's coupling from the last real node to the ghost therefore came out **positive** (+9.2e-5 vs the
+proper -1.4e-5): anti-diffusive. The geothermal BC sets the ghost 2.15 K warmer than the base exactly as designed,
+and the operator then pushes the base *away* from it. Measured, pure conduction, insulated top, geothermal base:
+
+    grid      ghost dtau   coupling     dE/dt (F_geo = +0.018)   base - surface after 3 yr (dry)
+    old         -65.8      +9.17e-05       -0.136 W/m2                  -42.7 K
+    fixed       +65.8      -1.40e-05       +0.021 W/m2                  +27.4 K   (eqic gradient kept)
+    old, ice    -65.8      +2.52e-01       -0.137 W/m2                   -0.3 K   (isothermal column, whole thing cools)
+    fixed, ice  +65.8      -3.86e-02       +0.021 W/m2                   +0.04 K
+
+So the bottom boundary removed 7.5x the geothermal flux from every two-layer column, dust and ice alike. The dry
+column drains at the base (which is why its base reached 0 K after 6.3 model years); the ice column, being
+nearly isothermal below the cap, loses the same energy uniformly, so its base-surface difference looked right
+(+3.5 K at the end of conv4 ice5) while the whole column cooled. Single-layer grids are not affected (different
+code path). Fix `69acb26` (one line plus a comment), regression test `prototypes/test_bottom_ghost_layer.py`
+(positive thicknesses, mirrored ghost, diffusive coupling, +F_geo energy gain, base warmer than surface; dry and
+ice), full prototype suite green, deployed to the Puma tree.
+
+**What it means, result by result — my read, your decision:**
+- **A6 / the seasonal chain (conv2 -> conv3 -> conv4):** artifact. The "drift that never converges" is the dry
+  column draining through a sink 7.5x F_geo, and the ice-dry differential is the difference between a column that
+  drains at its base and one that cools uniformly. None of it is physics. Every number in this thread about the
+  ice signal, its sign, its decay through zero, and the 1D-vs-3D comparison is void. The 1D `seasonal_1d.py`
+  has its own grid and I have not checked it. **My recommendation: rerun the pair from eqic on the fixed grid.**
+  With a real geothermal base the deep column no longer needs years to drain, so the 3-yr convergence problem
+  may largely disappear; I would start with ONE 3-yr dry run and read G5/G6 before committing the pair.
+- **T1/T2 (6 tiled lunations, winter):** survive with a caveat. In 0.5 yr the sink has not reached the surface:
+  a 1D column old vs fixed over 6 lunations gives identical surface temperature to 3 decimals while the base
+  differs by 24 K, and your own flux bound (<=0.7 K) is the right number for the floor. Your night-side and
+  midday findings stand as stated. Deep-profile statements (interior maximum, "unsettled column", G2/G3) are the
+  bug and should be withdrawn, not explained. **Rerun only if you want the deep column; the surface comparison
+  does not need it.**
+- **wfix controls, PSR70 winter figure, zf runs:** same category as T1/T2 (short runs) — surface unaffected at
+  the K level, deep profiles wrong. The G2 "IC drainage" gate was measuring this sink all along.
+- **The 110 K vs 68 K anchor story, the "tau~17 yr reservoir draining through the cap":** largely this.
+
+**Also done:** `--pair` gates on conv4 (ice5 complete vs dry to lunation 39 from the checkpoint) are not worth
+running now and I have not run them. Checkpoints and crash dumps work as designed (lunation 39 file loads, crash
+file carries the column). agenda: A6 note updated; new A25 (yours): decide the rerun plan.
+
+**What I need from you:** (1) go/no-go on the eqic rerun of the seasonal pair on the fixed grid (I can launch a
+single 3-yr dry today); (2) whether T1/T2 get rerun now or carry the caveat; (3) whether you want the T1 BT cube.
+
 ## 2026-10-05 — CS → CC — all three remaining jobs should have finished days ago; nothing synced since 10-01. Please report sacct and sync [ACTION: CC]
 
 Your 10-01 10:25 entry projected: conv4 ice5 (24048315) ~8 h left, conv4 dry relaunch (24064586) ~30 h,

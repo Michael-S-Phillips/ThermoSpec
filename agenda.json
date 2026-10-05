@@ -63,7 +63,7 @@
    "title": "Do NOT close A1 with a corrected signal: the zero-forcing control cannot remove differential spin-up. Extend the seasonal pair until matched-season drift < 0.1 K, and save the per-lunation differential as a convergence diagnostic",
    "status": "open",
    "blocking": true,
-   "note": "measured: differential starts +0.06 K, reaches -6.3 K, drifts -1.22 K/yr matched-season | CC 2026-09-29: conv3 pair FAILS (-0.553 K/yr time-matched; yr2->3 drift -0.80, accelerating; annual-min differential +1.12 -> +0.82 -> -0.44 K, decaying through zero). Driver --init-from warm restart validated (smoke 24046716, continuous to 0.02 K). conv4 = conv3 + 4 yr launched: 24048314 dry / 24048315 ice5. | CC 2026-10-01: conv4_dry CRASHED step 1599741 (lun 40/49): facet 195 (polygon floor, ~38 K) column min -1e-5 K; nothing saved. Added step_callback checkpoints + crash dump (aa6be1d); relaunched 24064586. ice5 (24048315) passed that step, ~8 h left."
+   "note": "measured: differential starts +0.06 K, reaches -6.3 K, drifts -1.22 K/yr matched-season | CC 2026-09-29: conv3 pair FAILS (-0.553 K/yr time-matched; yr2->3 drift -0.80, accelerating; annual-min differential +1.12 -> +0.82 -> -0.44 K, decaying through zero). Driver --init-from warm restart validated (smoke 24046716, continuous to 0.02 K). conv4 = conv3 + 4 yr launched: 24048314 dry / 24048315 ice5. | CC 2026-10-01: conv4_dry CRASHED step 1599741 (lun 40/49): facet 195 (polygon floor, ~38 K) column min -1e-5 K; nothing saved. Added step_callback checkpoints + crash dump (aa6be1d); relaunched 24064586. ice5 (24048315) passed that step, ~8 h left. | CC 2026-10-05: ROOT CAUSE = two-layer grid bottom ghost layer NEGATIVE thickness -> geothermal base was a -0.136 W/m2 SINK (69acb26). conv2/3/4 drift + ice-dry differential are artifacts; conv4_dry crashed again at the same step (base node -> 0 K). Rerun decision = A25."
   },
   {
    "id": "A7",
@@ -258,8 +258,18 @@
    "title": "LAUNCH tier 2: git pull (2b4d1f6) on cluster, then sbatch tier2_T2.slurm and tier2_T1.slurm; sync tier2__eqic_* outputs back",
    "status": "open",
    "blocking": false,
-   "note": "Scripts in claude_session_sync/data/rerun/. Driver + DEMs already staged in psr_run/. Expected T2 ~5.9 h, T1 ~11.6 h with the numba ShadowTester; without the pull they revert to the O(N^2) ray cast. | CC 2026-09-29: first attempt (24047290/24048330, OMP=8) stepped at 1.1/3.0 s (73 h/200 h) -> cancelled; pydisort OpenMP is 2x faster at 4 threads on Puma. RESUBMITTED T2 24048479 / T1 24048480 (OMP=4, walls 72/120 h, ~39/81 h projected). Also fixed: 40000 steps/day not 16000; output-window OOM -> crater_out_snapshot (43f12fd). Measured after resubmit (py-spy, 90 s): T2 0.61 s/step, T1 0.63 s/step -> both ~42 h (T1 better than the 81 h projection). | CC 2026-10-01: T2 DONE 41.6 h, synced to data/rerun/ (gates: G1 pass, G2/G3 fail on elev-p20 mask, G4 n/a). T1 at 110k/240k, 1.34 s/step, ~48 h left of 74 h."
+   "note": "Scripts in claude_session_sync/data/rerun/. Driver + DEMs already staged in psr_run/. Expected T2 ~5.9 h, T1 ~11.6 h with the numba ShadowTester; without the pull they revert to the O(N^2) ray cast. | CC 2026-09-29: first attempt (24047290/24048330, OMP=8) stepped at 1.1/3.0 s (73 h/200 h) -> cancelled; pydisort OpenMP is 2x faster at 4 threads on Puma. RESUBMITTED T2 24048479 / T1 24048480 (OMP=4, walls 72/120 h, ~39/81 h projected). Also fixed: 40000 steps/day not 16000; output-window OOM -> crater_out_snapshot (43f12fd). Measured after resubmit (py-spy, 90 s): T2 0.61 s/step, T1 0.63 s/step -> both ~42 h (T1 better than the 81 h projection). | CC 2026-10-01: T2 DONE 41.6 h, synced to data/rerun/ (gates: G1 pass, G2/G3 fail on elev-p20 mask, G4 n/a). T1 at 110k/240k, 1.34 s/step, ~48 h left of 74 h. | CC 2026-10-05: T1 thermal+convergence synced (99 h run; BT cube OOM-killed at 256 GB, no psr_floor file). T2/T1 surface results survive the ghost-sink bug (<=0.7 K); deep profiles do not."
+  },
+  {
+   "id": "A25",
+   "opened": "2026-10-05",
+   "owner": "CS",
+   "from": "CC",
+   "title": "DECIDE rerun plan after the two-layer bottom-ghost SINK bug (69acb26): seasonal pair conv2/3/4 + A6 are artifacts (rerun from eqic on fixed grid?); T1/T2 surface survives (<=0.7 K) but deep profiles are the bug; T1 BT cube OOM'd - rerun separately?",
+   "status": "open",
+   "blocking": true,
+   "note": "Measured: old grid base drew -0.136 W/m2 (7.5x F_geo, wrong sign) from every two-layer column, dust and ice. Fixed grid +0.021 W/m2. Full suite green. Deployed to Puma."
   }
  ],
- "next_id": 25
+ "next_id": 26
 }
