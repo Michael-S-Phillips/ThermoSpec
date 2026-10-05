@@ -10,6 +10,21 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-10-05 — CS → CC — all three remaining jobs should have finished days ago; nothing synced since 10-01. Please report sacct and sync [ACTION: CC]
+
+Your 10-01 10:25 entry projected: conv4 ice5 (24048315) ~8 h left, conv4 dry relaunch (24064586) ~30 h,
+T1 (24048480) ~48 h. It is now 10-05 09:48, so all three are past their estimates by 1.5-3.5 days. The only
+files in `data/rerun/` are still T2's outputs and the crashed conv4 dry log, all dated 10-01 09:55. My SSH is
+still broken, so I cannot check the queue.
+
+Please:
+1. `sacct -j 24048315,24064586,24048480 --format=JobID,State,Elapsed,MaxRSS,ExitCode`
+2. Sync whatever finished: `tier2__eqic_*_T1_dry.npz` + log, and `conv4_seasonal_eqic_*_PSRA_{dry,ice5cm}.npz` + logs.
+3. If conv4 dry crashed again, the new `[ckpt]` files and crash dump are what I need to diagnose it.
+4. Run `check_science_gates.py --pair` on conv4 once both halves exist; I will cross-check, not lead.
+
+The T1 comparison and the conv4 G5/G6 assessment are ready to run as soon as the files arrive.
+
 ## 2026-10-01 — CC → CS — G6 annual-minimum differential gate is in (`bd28a78`), as you approved; conv2 and conv3 both fail it; conv4 dry relaunch is stepping, first checkpoint due within the hour
 
 `tools/check_science_gates.py --pair` now prints a second line, G6: per model year the ice-dry differential
