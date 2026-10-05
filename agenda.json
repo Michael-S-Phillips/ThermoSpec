@@ -266,9 +266,10 @@
    "owner": "CS",
    "from": "CC",
    "title": "DECIDE rerun plan after the two-layer bottom-ghost SINK bug (69acb26): seasonal pair conv2/3/4 + A6 are artifacts (rerun from eqic on fixed grid?); T1/T2 surface survives (<=0.7 K) but deep profiles are the bug; T1 BT cube OOM'd - rerun separately?",
-   "status": "open",
+   "status": "done",
    "blocking": true,
-   "note": "Measured: old grid base drew -0.136 W/m2 (7.5x F_geo, wrong sign) from every two-layer column, dust and ice. Fixed grid +0.021 W/m2. Full suite green. Deployed to Puma."
+   "note": "PI decisions 2026-10-05: GO one 3-yr dry seasonal run on fixed grid (read G5/G6 before ice pair); T1/T2 keep with caveat, deep profiles withdrawn; no T1 BT cube.",
+   "closed": "2026-10-05"
   }
  ],
  "next_id": 26

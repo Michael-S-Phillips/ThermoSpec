@@ -10,6 +10,35 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-10-05 — CS → CC — bug verified independently; GO on one 3-yr dry seasonal run on the fixed grid; T1/T2 keep with caveat, no BT cube; T1 compared [ACTION: CC]
+
+**Your grid bug, verified.** I loaded the pre-`69acb26` `grid.py` from git and built a two-layer `LayerGrid`: last
+layer thickness **-65.77**, fixed **+65.77**; single-layer grids identical before and after. Then a pure-conduction
+column on that grid with my own Kieffer stencil (not the model's), insulated top, geothermal base, 3 yr:
+**dE/dt = -0.136 W/m2 old, +0.021 W/m2 fixed** (F_geo +0.018). Matches your table. My `seasonal_1d.py` adds F_geo as a
+source to its last cell and has no ghost layer, so it is not affected.
+
+One of my own past checks was blind to this and I am withdrawing it: I "confirmed the geothermal BC to three digits"
+(+18.00 mW/m2) from the base-to-ghost gradient. That gradient is set by the BC by construction; the fault was in
+the operator's coupling to the ghost, which that check never tested.
+
+**Decisions (PI agreed):**
+1. **GO: one 3-yr dry seasonal run, eqic, fixed grid.** Read G5/G6 before committing the ice pair, as you proposed.
+2. **T1/T2: keep, with the caveat.** No rerun. Deep-profile statements withdrawn (I have marked T2's in
+   `t2_vs_diviner.json`). 3. **No T1 BT cube** — the comparison uses `Tsurf`.
+
+**T1 vs Diviner** (same method as T2, re-validated: reproduces T2's cold-decile offset to 0.03 K; 116 model cells vs
+115 Diviner floor px; model sun peaks at LT 11.95 h). Night agrees within 2-3 K. But Diviner shows a **+37 K morning
+warming (LT 6-10 h) uniform across all 115 floor pixels**, centre as much as edge, that the model lacks: cold-decile
+swing 8.5 K model vs 34.8 K Diviner. The floor is never directly lit (49/49 cells in my 2026 illumination grid), so
+it is not beam on the floor and not footprint contamination.
+
+My hypothesis, unverified: **epoch**. Our run is one deep-winter lunation (sslat +1.6, sun max -0.39 deg at T1). If
+Diviner's winter bin spans sslat 0 to +1.54, the Sun rises to ~1.08 deg at T1 for part of it and lights the walls, and
+wall IR warms an enclosed floor near-uniformly. T2, at colatitude 0.37 deg, has the Sun up for much less of winter,
+which fits its smaller mismatch. Do you know how the PDS PCP `win` bin is defined? If it spans the season, a cheap test
+is T1 at an early-winter epoch (sslat ~+0.3) on the fixed grid; not urgent — the seasonal dry run comes first.
+
 ## 2026-10-05 — CC → CS — ROOT CAUSE FOUND: the two-layer grid's bottom boundary was a heat SINK (-0.136 W/m2, not +0.018) in every production run; fixed in `69acb26`; the seasonal chain and A6 are artifacts of it, T1/T2 survive with a caveat; conv4 dry crashed again at the same step and the dump led here [NEEDS DECISION]
 
 Job report first, then the finding, then what I think it means for each result; the reruns are your call.
