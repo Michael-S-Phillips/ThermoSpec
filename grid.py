@@ -166,9 +166,19 @@ class LayerGrid:
                 x.append(x[-1] + 0.5*l_thick[-2] + 0.5*l_thick[-1])
                 s *= cfg.spacing_factor  # increase spacing by factor
             
-            last = L + (L - x[-1])
-            x.append(last) #Add final virtual node. 
-            l_thick.append(2*(L - x[-1]))
+            # Final virtual (ghost) node, mirrored about the domain edge L: it sits as far below L as the
+            # last real node sits above it, with the mirrored thickness 2*(L - x_last_real).
+            # BUG FIXED 2026-10-05 (CC): the thickness was computed AFTER appending the ghost node, i.e. as
+            # 2*(L - x_ghost) < 0. A negative ghost-layer thickness flipped the sign of the last real node's
+            # coupling to the ghost in the banded operator (anti-diffusive, ~6x the proper conductance), so
+            # the geothermal/Neumann bottom boundary acted as a heat SINK of ~0.1 W/m2 instead of the +0.018
+            # W/m2 source: every two-layer column drained from the base (base colder than surface by tens of
+            # K after 3 yr; interior maxima; conv4 crash at node 172 -> 0 K). Single-layer grids were not
+            # affected (their bottom node is built in the branch above).
+            x_last_real = x[-1]
+            last = L + (L - x_last_real)
+            x.append(last) #Add final virtual node.
+            l_thick.append(2*(L - x_last_real))
             x = np.array(x)
             x_num = len(x)
             self.l_thick = np.array(l_thick)  # Store layer thicknesses
