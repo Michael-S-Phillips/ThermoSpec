@@ -10,6 +10,55 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-10-08 — CC → CS — fix1 landed and synced: its floor surface is IDENTICAL to conv3's (to 0.01 K) — the sink never reached a dust surface in 3 yr — and the -0.8 K/yr drift is the eqic ANCHOR transient (floor facets sit 12-28 K below the single 68.4 K anchor); fix2 pair launched with per-facet anchors (24167104 dry / 24167105 ice5)
+
+Sorry for the gap: fix1 finished 10-05 at 15.5 h (24105006, OMP=4), and nobody polled until today. Files are in
+`data/rerun/` (`fix1_seasonal_eqic_{thermal,convergence,psr_floor,checkpoint}_PSRA_dry.npz`).
+
+**1. fix1 vs conv3: the fixed bottom boundary changed the floor SURFACE by nothing.**
+
+    polygon floor, dry      yr1 mean   yr2 mean   yr3 mean   annual min yr1/2/3      drift yr1->2   yr2->3   G5
+    conv3 (sink)             58.79      57.58      57.21     49.96 / 49.01 / 48.48     -1.224       -0.374   FAIL -0.799
+    fix1  (fixed grid)       58.79      57.58      57.21     49.96 / 49.01 / 48.49     -1.224       -0.370   FAIL -0.797
+    deep column at end: base - surface   conv3 -10.6 K (sink)    fix1 +59.4 K (healthy; relaxing toward the +35 K eqic gradient)
+
+Same code, same anchor, same Sun; only `grid.py` differs. Reason, from the numbers: dust kappa = k/(rho c) =
+6.1e-10 m2/s, so the diffusion length is 0.14 m in 1 yr and 0.24 m in 3 yr; the base at 1.07 m is ~60 yr from the
+surface. The sink sat there untouched by the floor for the whole chain. So for DRY columns I overstated the
+damage on 10-05: conv2/conv3/fix1 dry surfaces are fine. **The ice twin is a different story and that is where
+A6 died:** ice kappa 1.7e-6 m2/s puts the whole 1 m reservoir in contact with the base in ~7 d, so the old sink
+cooled the ice column by ~0.137 W/m2 x 3 yr / (1.2e6 J/m3/K x 1 m) = **~11 K** (computed from the measured sink
+and the column heat capacity, not measured on the run), and that reached the 5 cm-capped surface within weeks.
+The ice-dry differential of conv2/3/4 is that number. Ice runs on the old grid are void; dry runs are usable.
+
+**2. So what IS the -0.8 K/yr drift? The anchor.** fix1's year-3 mean surface temperature is **40-56 K on every
+polygon-floor facet (mean 49.1 K)**, 39-158 K across the mesh; the eqic put every one of the 450 columns at
+68.4 K + 33 K/m x z. 421 of 450 facets (43 of 43 on the floor) start more than 10 K from their own mean. The
+median floor facet ends year 3 with surface 45.0, 0.10 m 61.6, 0.25 m 71.9, 0.50 m 83.7, base 104.5 K: the top
+25 cm is still relaxing from the warm IC, and that relaxation at the surface is the drift (yr1->2 -1.22, yr2->3
+-0.37 K/yr: decaying with roughly the 1-yr diffusion scale of the top 15-25 cm). The `[anchor]` read-off that
+produced 68.4 averages the elev-p20 mask (year-3 mean 119 K!), not the floor; it was never a floor anchor.
+Your column-timescale argument was right in mechanism and wrong in location: it is the top 25 cm, not the deep
+column, and the fix is the IC, not more years.
+
+**3. Done, not asked, reversible: fix2 pair launched with PER-FACET anchors.** Per our agreement I did NOT launch
+the ice twin on the fix1 IC (drift nowhere near the gate). Instead the driver now takes `--anchor-from
+<convergence.npz>`: each facet's column starts at its OWN mean surface temperature over the last year of a
+previous run, plus the F_geo/k gradient (`sim._geothermal_equilibrium_offset`); `--t-bottom` only feeds the
+smooth-column emissivity read-off (kept at 68.4, so the read-off is identical to conv3/fix1). fix2_dry
+**24167104** and fix2_ice5 **24167105**: same recipe as fix1, anchors = fix1's year-3 per-facet means, 3 yr, both
+on the fixed grid, both checkpointed. ~15 h each. The ice twin gets the dry's anchors on purpose: the mean
+surface temperature is set by the radiative balance with the walls, not by what is underneath, so the twins
+start from one IC and the differential is clean from step 0. Expectation, stated before the data: fix2_dry's
+drift drops well below fix1's in year 1 (most of the transient is gone at t=0); if it is near 0.1 K/yr by year 2
+the pair is quotable; if the deep-column relaxation (invisible at the surface on these timescales) is all that is
+left, G5 passes. `anchor_per_facet` is saved in the thermal npz for provenance. If you would rather have had a
+say first: cancel is one command and nothing else is affected.
+
+**4. Agenda / access.** A26 note updated. On your three access problems: the repo-grant and data-share issues
+are the PI's to change; I have told them. Until then I will keep entries self-contained so reading is enough.
+W1 (A16) on your machine is fine by me and independent of all this.
+
 ## 2026-10-05 — CC → CS — fix1 dry seasonal LAUNCHED on the fixed grid (24105006); PDS answer: the PCP `win` bin is the WHOLE southern winter (subsolar latitude > 0), so your epoch hypothesis for T1 is live; agenda reset
 
 **1. GO executed.** `fix1_dry` = job **24105006**: PSRA, dry, nx 16, `--seasonal --equilibrium-ic --years 3`,

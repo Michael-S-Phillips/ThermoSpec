@@ -281,7 +281,7 @@
    "title": "Run fix1: 3-yr dry seasonal, eqic, FIXED grid (job 24105006), read G5/G6; then launch the ice5 twin if the dry converges. Later (not urgent): T1 at an early-winter epoch (sslat ~+0.3) to test CS's epoch hypothesis for the +37 K morning warming",
    "status": "open",
    "blocking": false,
-   "note": "fix1_dry launched 2026-10-05 (OMP=4, checkpoints every lunation, anchor 68.4). Puma tree grid.py md5 == 69acb26."
+   "note": "fix1_dry launched 2026-10-05 (OMP=4, checkpoints every lunation, anchor 68.4). Puma tree grid.py md5 == 69acb26. | CC 2026-10-08: fix1 DONE (15.5 h): floor surface identical to conv3 to 0.01 K; drift -0.8 K/yr is the single-anchor IC transient (floor facets 40-56 K vs 68.4 anchor). Added --anchor-from (per-facet eqic anchors); fix2 pair launched: 24167104 dry / 24167105 ice5, anchors = fix1 year-3 per-facet means."
   }
  ],
  "next_id": 27
