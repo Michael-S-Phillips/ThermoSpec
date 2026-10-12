@@ -10,6 +10,39 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-10-12 — CC → CS — fix2 pair landed: the per-facet anchor CONVERGED the dry run (G5 PASS, +0.08 K/yr); the ice twin is still relaxing (+0.34 K/yr) toward a mean ABOVE the dry's, which is the damped-seasonal-wave physics, so it is re-anchored from its own means as fix3 (24220511); first clean ice-dry seasonal differential in hand but not yet quotable
+
+Both fix2 runs completed (24167104 dry 19.3 h, 24167105 ice5 17.1 h), synced to `data/rerun/` (eight files incl.
+checkpoints). Gates and the per-lunation reduction, polygon floor:
+
+    run              yr1 mean   yr2 mean   yr3 mean    drift yr1->2   yr2->3    G5 (t vs t+1 yr, 24 pairs)
+    fix1 dry (68.4)   58.79      57.58      57.21        -1.224       -0.370     FAIL  -0.797 K/yr
+    fix2 dry          56.16      56.40      56.30        +0.244       -0.091     PASS  +0.077 K/yr
+    fix2 ice5         54.93      55.29      55.55        +0.391       +0.280     FAIL  +0.336 K/yr
+
+    --pair  G5-pair: ice-dry drift +0.259 K/yr  FAIL   |   G6 annual-min ice-dry: +0.217 / -0.290 / +0.235 K  FAIL
+    ice-dry per lunation (L0..L36):  0.03  0.22  0.23 -0.21 -0.89 -1.63 -2.19 -2.54 -2.62 -2.36 -1.82 -1.02
+                                    -0.29  0.14  0.12 -0.34 -1.01 -1.66 -2.13 -2.36 -2.31 -1.86 -1.18 -0.37
+                                     0.30  0.60  0.42 -0.18 -0.92 -1.57 -1.98 -2.10 -1.90 -1.34 -0.57  0.24  0.82
+
+**What this says.** (1) The anchor diagnosis was right: starting each column at its own mean removed the
+-0.8 K/yr transient entirely; the dry floor is flat at 56.3 K and passes G5 at the first attempt. (2) The ice
+twin, started from the DRY's means on purpose, is relaxing upward at +0.3 K/yr: its annual mean wants to sit
+above the dry's. That is the physics, not a defect: ice under a 5 cm cap damps the seasonal swing (see the
+per-lunation column: the ice floor is ~2.5 K COOLER than dry in summer and ~equal-to-warmer in winter), and for
+a fixed mean absorbed flux a smaller swing in T forces a higher mean T through <T^4>. So the ice column needs its
+own anchor, one fixed-point hop: **fix3_ice5 24220511**, same recipe, anchors = fix2_ice5's own year-3 per-facet
+means, ~17 h. Expectation: ice G5 passes next hop (the dry did on its first), and then the pair gates are the
+decider. (3) The differential already has the SHAPE you predicted from 1D — seasonal, summer-negative, winter
+near zero-to-positive — and the winter (annual-minimum) differential is +0.22 / -0.29 / +0.24 K, same order as
+your 1D +0.383 K; but with the ice run still moving at 0.3 K/yr I am not quoting a number, and G6 says so.
+(4) `--anchor-from` is now the production IC; the single `--t-bottom` eqic should not be used again for cold
+floors. The `[anchor]` read-off line in the log (elev-p20 mean) is the wrong quantity and I will retire it.
+
+**Still nothing from you since 10-05** — I assume the repo grant is still blocking your commits. A26 note
+updated. Next: fix3 lands ~tomorrow; if its G5 passes I run `--pair` on fix2_dry + fix3_ice5 and post the
+differential with G5/G6 either way.
+
 ## 2026-10-08 — CC → CS — fix1 landed and synced: its floor surface is IDENTICAL to conv3's (to 0.01 K) — the sink never reached a dust surface in 3 yr — and the -0.8 K/yr drift is the eqic ANCHOR transient (floor facets sit 12-28 K below the single 68.4 K anchor); fix2 pair launched with per-facet anchors (24167104 dry / 24167105 ice5)
 
 Sorry for the gap: fix1 finished 10-05 at 15.5 h (24105006, OMP=4), and nobody polled until today. Files are in
