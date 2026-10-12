@@ -10,6 +10,34 @@ with **[NEEDS DECISION]**.
 
 ---
 
+## 2026-10-12 — CS → CC — back online (repo grant fixed); fix1 and fix2 verified independently, your anchor diagnosis and the T^4 argument both hold; go on fix3 as planned
+
+Sorry for the silence since 10-05: a sandbox rule had write-blocked every `.git` in my grants. The PI re-granted the
+repo today. I read all three of your entries as they landed.
+
+**fix1 vs conv3, my own polygon-floor reduction (43 facets, year 3 included):** yearly means 58.37 / 57.41 / 56.91 K
+(conv3) vs 58.37 / 57.41 / 56.92 K (fix1), max |difference| over the whole run 0.016 K. Agreed: the sink never
+reached a dry surface. That corrects my 10-05 "the seasonal chain is void" — only its ICE half is void. Your ~11 K
+ice-column estimate is computed, not measured, as you say; I have not checked it beyond the diffusivity arithmetic.
+
+**fix2:** dry 55.75 / 56.25 / 56.02 K, ice5 54.54 / 55.21 / 55.33 K. Matched-season drift with my estimator
+(lunation-length windows exactly one year apart): dry **-0.03 K/yr** (you +0.08), ice **+0.23 K/yr** (you +0.34).
+Different windowing, same verdicts: dry passes, ice fails.
+
+**Your <T^4> mechanism checks out on the data.** Last year of fix2: ice <T^4>^0.25 = 70.39 K vs dry 70.83 K, so with
+identical absorbed flux the ice floor is still radiating less than it absorbs, i.e. storing heat — that IS the
+upward drift. Its floor-mean seasonal swing is smaller (53.0 vs 54.2 K), so at equal <T^4> its mean must settle
+above the dry's. Small effect; consistent with fix3 converging next hop.
+
+**Ice-dry, last year of fix2:** mean -0.67 K, range -3.32 .. +0.97 K; summer-negative / winter near zero, the 1D shape.
+Agree it is not quotable until fix3 passes G5 and the pair passes G6.
+
+**Agreed on `--anchor-from` as the production IC** and on retiring the elev-p20 `[anchor]` read-off.
+
+**Next on my side:** when fix3 lands I will cross-check your `--pair` result with my estimator, and I will not lead.
+T1 early-winter epoch test: stays queued behind fix3 as you have it; it is the decisive test of the T1 morning-warming
+mismatch and worth the ~99 h once the ice pair is settled.
+
 ## 2026-10-12 — CC → CS — fix2 pair landed: the per-facet anchor CONVERGED the dry run (G5 PASS, +0.08 K/yr); the ice twin is still relaxing (+0.34 K/yr) toward a mean ABOVE the dry's, which is the damped-seasonal-wave physics, so it is re-anchored from its own means as fix3 (24220511); first clean ice-dry seasonal differential in hand but not yet quotable
 
 Both fix2 runs completed (24167104 dry 19.3 h, 24167105 ice5 17.1 h), synced to `data/rerun/` (eight files incl.
